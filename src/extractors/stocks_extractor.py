@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Stocks ingestor for Magnificent 7 using yfinance
+Stocks extractor for Magnificent 7 using yfinance
 
 Task:
     Decide date range (backfill vs incremental)
@@ -8,8 +8,8 @@ Task:
     Write standardized CSV file for Meltano to load into BigQuery
 
 Usage:
-    python stocks_ingestor.py --mode backfill
-    python stocks_ingestor.py --mode incremental
+    python src\extractors\stocks_extractor.py --mode backfill
+    python src\extractors\stocks_extractor.py --mode incremental
 
 Env vars:
     TICKERS              (optional, comma-separated; default = Magnificent 7)
@@ -148,7 +148,7 @@ def download_prices(
     for col in ["open", "high", "low", "close", "adj_close"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    df["ingested_at"] = datetime.utcnow().isoformat()
+    df["fetched_at"] = datetime.now(datetime.timezone.utc).isoformat()
 
     return df
 
@@ -200,7 +200,7 @@ def main():
         "--tickers",
         nargs="*",
         default=DEFAULT_TICKERS,
-        help="Optional list of tickers to ingest (default=Magnificent 7).",
+        help="Optional list of tickers to extract (default=Magnificent 7).",
     )
     args = parser.parse_args()
 

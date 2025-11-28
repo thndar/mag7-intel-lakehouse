@@ -1,0 +1,20 @@
+###############################################################################
+# ENVIRONMENT TEMPLATE FOR MAG7-INTEL
+# Copy this file to `.env`.
+###############################################################################
+
+# ============================================================================
+# EXTRACTiON SETTINGS
+# ============================================================================
+# Total years for historical backfill
+BACKFILL_YEARS=5
+
+# Optional: override the start date for backfill (YYYY-MM-DD)
+# If unset, START_DATE = TODAY - BACKFILL_YEARS
+START_DATE=2020-01-01
+
+# Magnificent 7 default tickers (comma-separated)
+TICKERS=AAPL,MSFT,GOOGL,AMZN,META,TSLA,NVDA
+
+# extracted data output directory (tap for meltano)
+OUTPUT_DIR=./data

@@ -5,7 +5,7 @@
 This project implements an end-to-end **data lakehouse + ELT pipeline** with:
 
 * Automated **daily ingestion** (stocks, news, macro)
-* BigQuery data warehouse modeling (staging → core → marts)
+* BigQuery data warehouse modeling (raw → staging → marts)
 * Orchestration using **Dagger**
 * Analytics dashboard using **Streamlit**
 * Phase 2: ML feature store & predictive models
@@ -21,6 +21,21 @@ Ensure the following are installed locally
 * Google Cloud SDK (`gcloud`)
 * Conda / Miniconda
 
+## 0.1 Git & Github Repo
+
+```
+# 1. clone from github repo
+git clone <repo>
+cd <repo>
+
+# 2. Create your own branch:
+git checkout -b <your-branch-name>
+
+# 3. Update guthub - your branch
+git add .
+git commit -m "My update"
+git push -u origin <your-branch-name>  # do it once, git push subsequently
+```
 
 ---
 # 🚀 1. Project Setup
@@ -72,7 +87,7 @@ export BQ_DATASET_MARTS="mag7_intel_marts"
 
 To clean up the environment var after deactivating the environment, create deactivate hook shell file
 ```
-nano $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+nano $CONDA_PREFIX/etc/conda/deactivate.d/env_vars.sh
 ```
 
 Put this inside:
@@ -153,13 +168,13 @@ You may run 'meltano config target-bigquery set --interactive' to configure the 
     variant: z3z1ma
     pip_url: git+https://github.com/z3z1ma/target-bigquery.git
     config:
-      credentials_path: "{{ env_var('GOOGLE_APPLICATION_CREDENTIALS') }}"
-      dataset: "{{ env_var('BQ_DATASET_RAW') }}"  # default dataset for Meltano
+      credentials_path: ${GOOGLE_APPLICATION_CREDENTIALS}
+      dataset: ${BQ_DATASET_RAW}  # default dataset for Meltano
       denormalized: true
       flattening_enabled: true
       flattening_max_depth: 1
       method: batch_job
-      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      project: ${GCP_PROJECT_ID}
 ```
 The config make use of environment variables loaded in the conda environment.
 
@@ -264,26 +279,82 @@ mag7-intel/
 
 ---
 
-# 📥 3. Running Data Extraction Scripts
+# 📥 3. Data Extraction Scripts
 
-stock extractor.py support two modes:
+### 3.1 Stock Extractor
 
+stocks_extractor.py support two modes:
 * `--mode backfill` → extract historical data (run once)
 * `--mode incremental` → extract new data based on MAX(date) in BigQuery (daily)
 
-### Example: Stock Prices (yfinance)
+```bash
+python src/extractors/stocks_extractor.py --mode backfill
+python src/extractors/stocks_extractor.py --mode incremental
+```
+
+### 3.2 Google News Extractor
+
+news_extractor.py supports the following modes:
+* `--window 1d/7d/30d` → extract older news 1d/7d/30d back, note that google limits to 100 records per ticker
+* `--tickers AAPL MSFT` → extract new for specific tickers
 
 ```bash
-python src/ingestion/stocks_ingestor.py --mode backfill
-python src/ingestion/stocks_ingestor.py --mode incremental
+python src/extractors/news_extractor.py
+python src/extractors/news_extractor.py --window 1d
+python src/extractors/news_extractor.py --tickers AAPL MSFT --window 7d
 ```
 
 ---
 
-# 🏗 4. Running dbt Transformations
+# 📥 4. Meltano
+
+### 4.1 meltano install (add tap-csv)
+
+**in meltano folder**
+```
+meltano add tap-csv
+# config tap-csv (files)
+
+meltano job add load_csvs
+
+# if encounter err, manually add this in yml
+jobs:
+  - name: load_csvs
+    tasks:
+      - tap-csv target-bigquery
+```
+
+### 4.2 meltano run job 
+```
+meltano run load_csvs  # job name defined in yml
+```
+
+# 🏗 5. dbt
+
+### 5.1 dbt seeds
+Create seed dims for analytical lookup.
+1. Add ticker & calendar csv files in seeds folder
+
+2. Add seeds section in dbt_project.yml
+```
+seeds:
+  mag7_intel:
+    +schema: mag7_intel_dims
+    tickers:
+      +alias: dim_ticker
+    calendar:
+      +alias: dim_calendar
+```
+
+2. Execute & create dims
+```
+dbt seed
+```
+
+### 5.1 staging - type cast & dedup 
 
 
-# 🤖 5. Running Dagger Pipeline
+# 🤖 6. Running Dagger Pipeline
 
 ```bash
 python dagger/main.py

@@ -3,8 +3,8 @@
 News extractor for tickers using Google News RSS + FinBERT sentiment.
 
 Usage:
-    python src/extractor/news_extractor.py --window 1d
-    python src/extractor/news_extractor.py --tickers AAPL MSFT --window 7d
+    python src/extractors/news_extractor.py --window 1d
+    python src/extractors/news_extractor.py --tickers AAPL MSFT --window 7d
 
 Writes to:
     OUTPUT_DIR/news/news_<window>_<YYYYMMDD_HHMMSS>.csv
@@ -184,7 +184,7 @@ def fetch_news_for_ticker(ticker: str, window: str) -> List[Dict]:
                 "url": url_text,
                 "source": "google_news",
                 "window": window,
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(datetime.timezone.utc).isoformat(),
             }
         )
 
@@ -211,7 +211,7 @@ def run_news_extractor(tickers: List[str], window: str) -> Path | None:
     output_dir = BASE_OUTPUT_DIR / "news"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
     output_path = output_dir / f"news_{window}_{ts}.csv"
 
     print(f"Writing {len(df)} rows → {output_path}")
