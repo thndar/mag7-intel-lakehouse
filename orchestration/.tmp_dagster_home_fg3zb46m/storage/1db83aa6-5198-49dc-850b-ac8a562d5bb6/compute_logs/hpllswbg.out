@@ -1,0 +1,23 @@
+Loading FinBERT model for financial sentiment...
+Fetching news for AAPL with window=1d:
+  https://news.google.com/rss/search?q=AAPL+stock+when:1d&hl=en-US&gl=US&ceid=US:en
+  Found 37 articles
+Fetching news for MSFT with window=1d:
+  https://news.google.com/rss/search?q=MSFT+stock+when:1d&hl=en-US&gl=US&ceid=US:en
+  Found 41 articles
+Fetching news for GOOGL with window=1d:
+  https://news.google.com/rss/search?q=GOOGL+stock+when:1d&hl=en-US&gl=US&ceid=US:en
+  Found 51 articles
+Fetching news for AMZN with window=1d:
+  https://news.google.com/rss/search?q=AMZN+stock+when:1d&hl=en-US&gl=US&ceid=US:en
+  Found 51 articles
+Fetching news for META with window=1d:
+  https://news.google.com/rss/search?q=META+stock+when:1d&hl=en-US&gl=US&ceid=US:en
+  Found 40 articles
+Fetching news for TSLA with window=1d:
+  https://news.google.com/rss/search?q=TSLA+stock+when:1d&hl=en-US&gl=US&ceid=US:en
+  Found 38 articles
+Fetching news for NVDA with window=1d:
+  https://news.google.com/rss/search?q=NVDA+stock+when:1d&hl=en-US&gl=US&ceid=US:en
+  Found 68 articles
+Writing 326 rows → /home/shpang/devs/ntu/projects/mag7_intel/data/news/news_1d_20251130_124755.csv

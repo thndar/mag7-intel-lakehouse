@@ -14,7 +14,7 @@ plugins:
     pip_url: git+https://github.com/MeltanoLabs/tap-csv.git
     config:
         files:
-          - entity: stock_prices
+          - entity: stock_prices_all
             path: "../data/stocks/"
             keys: ["ticker", "date"]
             delimiter: ","

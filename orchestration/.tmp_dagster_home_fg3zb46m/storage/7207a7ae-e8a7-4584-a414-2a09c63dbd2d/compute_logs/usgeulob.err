@@ -1,0 +1,25 @@
+[32m2025-11-30 20:54:51 +0800[0m - dagster - [34mDEBUG[0m - mag7_intel_daily_job - 7207a7ae-e8a7-4584-a414-2a09c63dbd2d - 495421 - LOGS_CAPTURED - Started capturing logs in process (pid: 495421).
+[32m2025-11-30 20:54:51 +0800[0m - dagster - [34mDEBUG[0m - mag7_intel_daily_job - 7207a7ae-e8a7-4584-a414-2a09c63dbd2d - 495421 - stg_stock_prices - STEP_START - Started execution of step "stg_stock_prices".
+[32m2025-11-30 20:54:52 +0800[0m - dagster - [34mINFO[0m - mag7_intel_daily_job - 7207a7ae-e8a7-4584-a414-2a09c63dbd2d - stg_stock_prices - Running dbt: stg_stock_prices+
+[32m2025-11-30 20:55:18 +0800[0m - dagster - [34mINFO[0m - mag7_intel_daily_job - 7207a7ae-e8a7-4584-a414-2a09c63dbd2d - stg_stock_prices - [0m12:54:58  Running with dbt=1.10.15
+[0m12:55:07  Registered adapter: bigquery=1.10.3
+[0m12:55:08  [[33mWARNING[0m]: Configuration paths exist in your dbt_project.yml file which do not apply to any resources.
+There are 1 unused configuration paths:
+- models.mag7_intel.example
+[0m12:55:08  Found 2 seeds, 15 data tests, 6 models, 4 sources, 520 macros
+[0m12:55:08  The selection criterion 'stg_stock_prices+' does not match any enabled nodes
+[0m12:55:08  
+[0m12:55:08  Concurrency: 4 threads (target='dev')
+[0m12:55:08  
+[0m12:55:10  1 of 1 START sql incremental model mag7_intel_staging.news_headlines ........... [RUN]
+[0m12:55:15  1 of 1 OK created sql incremental model mag7_intel_staging.news_headlines ...... [[32mMERGE (885.0 rows, 1.2 MiB processed)[0m in 5.37s]
+[0m12:55:15  
+[0m12:55:15  Finished running 1 incremental model in 0 hours 0 minutes and 6.62 seconds (6.62s).
+[0m12:55:15  
+[0m12:55:15  [32mCompleted successfully[0m
+[0m12:55:15  
+[0m12:55:15  Done. PASS=1 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=1
+
+[32m2025-11-30 20:55:18 +0800[0m - dagster - [34mDEBUG[0m - mag7_intel_daily_job - 7207a7ae-e8a7-4584-a414-2a09c63dbd2d - 495421 - stg_stock_prices - STEP_OUTPUT - Yielded output "result" of type "Nothing". (Type check passed).
+[32m2025-11-30 20:55:18 +0800[0m - dagster - [34mDEBUG[0m - mag7_intel_daily_job - 7207a7ae-e8a7-4584-a414-2a09c63dbd2d - 495421 - stg_stock_prices - ASSET_MATERIALIZATION - Materialized value stg_stock_prices.
+[32m2025-11-30 20:55:18 +0800[0m - dagster - [34mDEBUG[0m - mag7_intel_daily_job - 7207a7ae-e8a7-4584-a414-2a09c63dbd2d - 495421 - stg_stock_prices - STEP_SUCCESS - Finished execution of step "stg_stock_prices" in 26.89s.

@@ -1,36 +1,62 @@
 #!/usr/bin/env python
 """
-Stocks extractor for Magnificent 7 using yfinance
+Stocks extractor for Magnificent 7 + Indexes (VIX, NASDAQ) using yfinance.
 
-Task:
-    Decide date range (backfill vs incremental)
-    Download prices from yfinance
-    Write standardized CSV file for Meltano to load into BigQuery
+Responsibilities:
+    - Decide date range (backfill vs incremental)
+    - Download OHLCV prices from yfinance
+    - Write standardized CSV file for Meltano to load into BigQuery
 
-Usage:
-    python src\extractors\stocks_extractor.py --mode backfill
-    python src\extractors\stocks_extractor.py --mode incremental
+What it can fetch:
+    - Magnificent 7: AAPL, MSFT, GOOGL, AMZN, META, TSLA, NVDA
+    - ^IXIC  : NASDAQ Composite Index
+    - ^NDXE  : NASDAQ-100 Equal-Weighted Index
+    - ^VIX   : CBOE Volatility Index (optional flag)
+
+Usage (CLI examples):
+    # Backfill: Mag7 + NASDAQ indexes + VIX
+    python src/extractors/stock_extractor.py \
+        --mode backfill \
+        --universe mag7_with_indexes \
+        --include-vix
+
+    # Daily incremental: Mag7 + NASDAQ indexes + VIX
+    python src/extractors/stock_extractor.py \
+        --mode incremental \
+        --universe mag7_with_indexes \
+        --include-vix
 
 Env vars:
-    TICKERS              (optional, comma-separated; default = Magnificent 7)
     START_DATE           (optional, for backfill; default: BACKFILL_YEARS ago, YYYY-MM-DD)
     BACKFILL_YEARS       (optional, default: 3)
     INCREMENTAL_DAYS     (optional, default: 1, for incremental mode)
-    OUTPUT_DIR           (optional, default: "data/stocks")
+    OUTPUT_DIR           (optional, default: "data")
+    INCLUDE_VIX          (optional, "true"/"false", default: false)
+
+Dagster usage:
+    from src.extractors.stock_extractor import extract_to_csv
+
+    @op
+    def extract_prices_op():
+        return extract_to_csv(
+            mode="incremental",
+            universe="mag7_with_indexes",
+            include_vix=True,
+        )
 """
 
 import argparse
 import os
 from datetime import date, datetime, timedelta, timezone
-from typing import List
 from pathlib import Path
-from dotenv import load_dotenv
+from typing import List, Optional, Tuple
 
 import pandas as pd
 import yfinance as yf
+from dotenv import load_dotenv
 
 
-# --------- Config ---------
+# --------- Paths & Env ---------
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
@@ -38,48 +64,124 @@ load_dotenv(PROJECT_ROOT / ".env")
 BASE_OUTPUT = os.getenv("OUTPUT_DIR", "./data")
 BASE_OUTPUT_DIR = PROJECT_ROOT / BASE_OUTPUT
 
-# Default tickers (Magnificent 7)
-DEFAULT_TICKERS = [t.strip() for t in os.getenv("TICKERS", "").split(",") if t.strip()] or [
+# --------- Logical universes ---------
+
+# Magnificent 7 tickers
+DEFAULT_MAG7 = [t.strip() for t in os.getenv("TICKERS", "").split(",") if t.strip()] or [
     "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA"
 ]
 
+# NASDAQ index tickers we want to track
+DEFAULT_INDICES = [i.strip() for i in os.getenv("INDICES", "").split(",") if i.strip()] or [
+    "^IXIC",   # NASDAQ Composite Index
+    "^NDXE",   # NASDAQ-100 Equal Weight Index
+]
 
-# --------- Helper Functions ---------
 
-def parse_date(s: str) -> date:
+# --------- Date helpers ---------
+
+def _parse_date(s: str) -> date:
     return datetime.strptime(s, "%Y-%m-%d").date()
 
 
-def get_backfill_date_range() -> tuple[date, date]:
-    """Determine backfill start/end dates based on START_DATE or BACKFILL_YEARS."""
+def get_backfill_date_range() -> Tuple[date, date]:
+    """
+    Determine backfill start/end dates based on START_DATE or BACKFILL_YEARS.
+    """
     today = date.today()
 
     start_env = os.environ.get("START_DATE")
     if start_env:
-        start = parse_date(start_env)
+        start = _parse_date(start_env)
     else:
         years = int(os.environ.get("BACKFILL_YEARS", "3"))
         start = today - timedelta(days=365 * years)
 
-    end = today  # inclusive logically
+    end = today
     return start, end
 
 
-def get_incremental_date_range() -> tuple[date, date]:
+def get_incremental_date_range() -> Tuple[date, date]:
     """
     Determine start/end dates for incremental load.
 
-    Here we keep it simple and use the last N days based on INCREMENTAL_DAYS
-    (default: 1 = today only). Idempotency / dedupe will be handled downstream
-    in Meltano/dbt.
+    Uses the last N days based on INCREMENTAL_DAYS (default: 1 = today only).
+    Idempotency / dedupe is handled downstream (Meltano/dbt).
     """
     today = date.today()
     days = int(os.environ.get("INCREMENTAL_DAYS", "1"))
-    # e.g. days=1 → start=today, end=today
     start = today - timedelta(days=days - 1)
     end = today
     return start, end
 
+
+# --------- Universe / tickers helpers ---------
+
+def get_universe_tickers(universe: str) -> List[str]:
+    """
+    Get list of tickers for a given 'universe'.
+
+    universe:
+        - "mag7": Magnificent 7 only
+        - "mag7_with_indexes": Magnificent 7 + NASDAQ index tickers (^IXIC, ^NDXE)
+    """
+    universe = universe.lower()
+    mag7 = DEFAULT_MAG7.copy()
+
+    if universe == "mag7":
+        return mag7
+
+    if universe == "mag7_with_indexes":
+        return sorted(set(mag7 + DEFAULT_INDICES))
+
+    # Default safety: fallback to mag7
+    return mag7
+
+
+def apply_vix_flag(tickers: List[str], include_vix: bool) -> List[str]:
+    """
+    Optionally append ^VIX to the tickers list.
+    """
+    if include_vix and "^VIX" not in tickers:
+        tickers = tickers + ["^VIX"]
+    return tickers
+
+
+def resolve_tickers_for_run(
+    universe: str,
+    cli_tickers: Optional[List[str]] = None,
+    include_vix: bool = False,
+) -> List[str]:
+    """
+    Resolve the final tickers list for this run, based on:
+        1) explicit CLI tickers (highest priority)
+        2) logical universe (mag7 / mag7_with_indexes)
+
+    NOTE: We *intentionally* ignore TICKERS env here to avoid silently
+    overriding the universe (this previously caused ^IXIC/^NDXE to be dropped).
+
+    Then optionally append ^VIX.
+    """
+    # 1) CLI-provided tickers override universe
+    if cli_tickers:
+        tickers = cli_tickers
+    else:
+        # 2) Use logical universe only
+        tickers = get_universe_tickers(universe)
+
+    # Include VIX if requested (CLI or env)
+    env_include_vix = os.getenv("INCLUDE_VIX", "false").lower() in ("1", "true", "yes", "y")
+    include_vix_final = include_vix or env_include_vix
+
+    tickers = apply_vix_flag(tickers, include_vix_final)
+
+    # Debug: print final list head so you can see ^IXIC/^NDXE/^VIX
+    print(f"[INFO] Resolved {len(tickers)} tickers: {tickers}")
+
+    return tickers
+
+
+# --------- Download + write ---------
 
 def download_prices(
     tickers: List[str],
@@ -89,7 +191,14 @@ def download_prices(
     """
     Download OHLCV from yfinance for list of tickers between start and end (inclusive).
     yfinance's 'end' is exclusive, so we add +1 day.
+
+    Returns a DataFrame with columns:
+        ticker, date, open, high, low, close, adj_close, volume, fetched_at
     """
+    if not tickers:
+        print("[WARN] No tickers provided to download_prices; returning empty DataFrame.")
+        return pd.DataFrame()
+
     end_exclusive = end + timedelta(days=1)
     data = yf.download(
         tickers=tickers,
@@ -105,6 +214,7 @@ def download_prices(
 
     # Normalize to one row per (date, ticker)
     if isinstance(data.columns, pd.MultiIndex):
+        # Ensure first level is ticker, second level is OHLCV fields
         if data.columns.levels[0].isin(["Open", "High", "Low", "Close", "Adj Close", "Volume"]).any():
             data = data.swaplevel(axis=1)
 
@@ -116,6 +226,7 @@ def download_prices(
             records.append(df_t.reset_index(drop=True))
         df = pd.concat(records, ignore_index=True)
     else:
+        # Single ticker case
         ticker = tickers[0]
         df = data.copy()
         df["ticker"] = ticker
@@ -153,24 +264,28 @@ def download_prices(
     return df
 
 
-# --------- Core extractor module to be used by Dagster or main() ---------
-def run_extractor(mode: str, tickers: List[str]) -> Path:
-    """Core extraction logic, reusable from CLI or Dagster.
+def run_extractor(mode: str, tickers: List[str]) -> Optional[Path]:
+    """
+    Core extraction logic, reusable from CLI or orchestrators (Dagster).
 
-    Returns the path to the output CSV file.
+    Args:
+        mode: "backfill" or "incremental"
+        tickers: list of ticker symbols to fetch
+
+    Returns:
+        Path to the output CSV file, or None if no data was returned.
     """
     if mode == "backfill":
         start, end = get_backfill_date_range()
     else:
         start, end = get_incremental_date_range()
 
-    print(f"Mode: {mode}")
-    print(f"Tickers: {tickers}")
-    print(f"Date range: {start} → {end}")
+    print(f"[INFO] Mode: {mode}")
+    print(f"[INFO] Date range: {start} → {end}")
 
     df = download_prices(tickers, start, end)
     if df.empty:
-        print("No data returned from yfinance for this range; exiting.")
+        print("[WARN] No data returned from yfinance for this range; nothing to write.")
         return None
 
     output_dir = BASE_OUTPUT_DIR / "stocks"
@@ -180,16 +295,47 @@ def run_extractor(mode: str, tickers: List[str]) -> Path:
     end_str = end.strftime("%Y%m%d")
     output_path = output_dir / f"prices_{start_str}_{end_str}.csv"
 
-    print(f"Writing {len(df)} rows to {output_path}...")
+    print(f"[INFO] Writing {len(df)} rows to {output_path} ...")
     df.to_csv(output_path, index=False)
-    print("Extract completed successfully.")
+    print("[INFO] Extract completed successfully.")
 
     return output_path
 
 
-# --------- CLI Main entrypoint ---------
-def main():
-    parser = argparse.ArgumentParser(description="Extract Magnificent 7 stock prices via yfinance to CSV.")
+# --------- Orchestrator-friendly wrapper ---------
+
+def extract_to_csv(
+    mode: str,
+    universe: str = "mag7",
+    include_vix: bool = False,
+    tickers: Optional[List[str]] = None,
+) -> Optional[Path]:
+    """
+    High-level function for Dagster/Meltano/etc.
+
+    Resolves tickers from universe/CLI, then runs the extractor and writes CSV.
+
+    Args:
+        mode: "backfill" or "incremental"
+        universe: "mag7" or "mag7_with_indexes"
+        include_vix: whether to append "^VIX" to the universe
+        tickers: optional explicit list of tickers (overrides universe)
+
+    Returns:
+        Path to the written CSV, or None if no data.
+    """
+    final_tickers = resolve_tickers_for_run(
+        universe=universe,
+        cli_tickers=tickers,
+        include_vix=include_vix,
+    )
+    return run_extractor(mode=mode, tickers=final_tickers)
+
+
+# --------- CLI entrypoint ---------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Extract stock and index prices via yfinance to CSV.")
     parser.add_argument(
         "--mode",
         choices=["backfill", "incremental"],
@@ -199,12 +345,30 @@ def main():
     parser.add_argument(
         "--tickers",
         nargs="*",
-        default=DEFAULT_TICKERS,
-        help="Optional list of tickers to extract (default=Magnificent 7).",
+        default=None,
+        help="Optional explicit list of tickers to extract. "
+             "If not provided, we use --universe (Mag7 by default).",
+    )
+    parser.add_argument(
+        "--universe",
+        choices=["mag7", "mag7_with_indexes"],
+        default="mag7",
+        help="Logical ticker universe to use when --tickers is not provided.",
+    )
+    parser.add_argument(
+        "--include-vix",
+        action="store_true",
+        help="If set, append ^VIX to the ticker universe.",
     )
     args = parser.parse_args()
 
-    run_extractor(args.mode, args.tickers)
+    extract_to_csv(
+        mode=args.mode,
+        universe=args.universe,
+        include_vix=args.include_vix,
+        tickers=args.tickers,
+    )
+
 
 if __name__ == "__main__":
     main()

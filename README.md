@@ -269,8 +269,9 @@ mag7-intel/
 │
 ├── dbt/
 ├── meltano/
-├── dagger/
-│   └── main.py
+├── orchestration/
+│   └── orchestration/
+│   └── orchestration_tests/
 │
 └── dashboards/
     └── streamlit/
@@ -288,8 +289,8 @@ stocks_extractor.py support two modes:
 * `--mode incremental` → extract new data based on MAX(date) in BigQuery (daily)
 
 ```bash
-python src/extractors/stocks_extractor.py --mode backfill
-python src/extractors/stocks_extractor.py --mode incremental
+python src/extractors/stock_extractor.py --mode backfill --universe mag7_with_indexes --include-vix
+python src/extractors/stocks_extractor.py --mode incremental --universe mag7_with_indexes --include-vix
 ```
 
 ### 3.2 Google News Extractor
@@ -355,12 +356,17 @@ dbt seed
 
 1. Create source.yml
 
-2. type cast & dedup for news and stocks
+2. type cast & dedup for news and stocks, break stocks into mag7, vix and index
   * create stg_news_headlines.sql
-  * create stg_stock_prices.sql
+  * create stg_stock_prices_all.sql
+  * create stg_stock_prices_mag7.sql
+  * create stg_stock_prices_vix.sql
+  * create stg_stock_prices_index.sql
   * run & test
     ```
     dbt run
+    dbt run # or 
+    dbt run -s stg_stock_prices_all  # to run individual module
     dbt test
     ```
 
@@ -368,28 +374,39 @@ dbt seed
 
 4. ?
 
-# 🤖 6. Running Dagger Pipeline
+# 🤖 6. Dagster Orchestration
 
+### 6.1 Create dagster scaffold
+```
+dagster project scaffold --name orchestration
+
+```
+
+### 6.2 create assets.py
+Creat asset.py with following assets:
+1. news extractor
+  csv_path = run_news_extractor(tickers, window)
+2. stock price extractor
+  csv_path = extract_to_csv(mode, universe, include_vix, tickers)
+3. Meltano load (csv → BigQuery)
+  subprocess.run(
+        ["meltano", "run", "load_csvs"],
+        cwd, check, capture_output, text  )
+4. DBT Transforms (STAGING)
+  subprocess.run(
+        dbt_cmd, cwd=DBT_DIR, check=False,
+        capture_output=True, text=True, )
+
+### 6.3 Configure definitions.py
+
+### 6.4 Run Dagster
+
+**in orchestration folder**
 ```bash
-python dagger/main.py
-```
-
-Dagger performs Phase 1 ELT:
-
-1. Ingestion (incremental)
-2. dbt deps
-3. dbt run
-4. dbt test
-
-The shared CI pipeline will use:
-
-```
-BQ_DATASET_RAW=raw
-GCS_LAKE_BUCKET=mag7-intel-lake
+dagster dev
 ```
 
 ---
-
 # 🌐 6. Running Streamlit Dashboard
 
 ```bash

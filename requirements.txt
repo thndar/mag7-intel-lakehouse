@@ -36,9 +36,10 @@ dbt-bigquery>=1.7
 meltano>=3.4
 
 # ===============================
-# Dagger (Orchestration)
+# Dagster (Orchestration)
 # ===============================
-dagger-io>=0.10
+dagster>=1.7
+dagster-webserver>=1.7
 
 # ===============================
 # Dashboard / Visualization

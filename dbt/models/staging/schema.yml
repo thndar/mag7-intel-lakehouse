@@ -1,11 +1,28 @@
 version: 2
 
 models:
-  - name: stg_stock_prices
-    description: "Staging table for stock prices: typed, deduplicated by (ticker, trade_date), incremental on fetched_at."
+  # ---------------------------------------------------------------------------
+  # Base staging model: all prices (Mag7, VIX, NASDAQ indexes)
+  # ---------------------------------------------------------------------------
+  - name: stg_stock_prices_all
+    description: >
+      Canonical staging table for all daily price series ingested from yfinance:
+      - Mag7 equities (AAPL, MSFT, GOOGL, AMZN, META, TSLA, NVDA)
+      - Volatility index (^VIX)
+      - NASDAQ Composite (^IXIC)
+      - NASDAQ-100 Equal Weight Index (^NDXE)
+
+      Data is:
+      - typed to appropriate numeric/date types
+      - deduplicated by (ticker, trade_date) on latest fetched_at
+      - incrementally updated using fetched_at as the watermark.
     columns:
       - name: ticker
-        description: "Stock ticker symbol (e.g. AAPL, MSFT)."
+        description: >
+          Symbol for the instrument. Includes:
+          - Mag7 equities (e.g. AAPL, MSFT, NVDA)
+          - Volatility index (^VIX)
+          - NASDAQ indices (^IXIC, ^NDXE)
         tests:
           - not_null
 
@@ -25,12 +42,67 @@ models:
       - name: adj_close
         description: "Adjusted closing price for the trading day."
       - name: volume
-        description: "Number of shares traded during the day."
+        description: >
+          Number of shares/contracts traded during the day.
+          For index series (e.g. ^IXIC, ^NDXE, ^VIX) this may be null or not meaningful.
 
       - name: fetched_at
-        description: "Timestamp when this record was fetched/scraped into the raw layer, used as incremental watermark."
+        description: "Timestamp when this record was fetched into the raw layer, used as incremental watermark."
 
-  - name: stg_google_news
+  # ---------------------------------------------------------------------------
+  # Convenience splits on top of stg_stock_prices
+  # ---------------------------------------------------------------------------
+
+  - name: stg_stock_prices_mag7
+    description: >
+      Convenience view for Mag7 equities only, filtered from stg_stock_prices.
+      Contains one row per (ticker, trade_date) for:
+      AAPL, MSFT, GOOGL, AMZN, META, TSLA, NVDA.
+    columns:
+      - name: ticker
+        description: "Mag7 equity ticker symbol."
+        tests:
+          - not_null
+      - name: trade_date
+        description: "Trading date for the Mag7 equity."
+        tests:
+          - not_null
+
+  - name: stg_stock_prices_vix
+    description: >
+      Convenience view for the ^VIX volatility index series, filtered from stg_stock_prices.
+      Used for market sentiment and risk-regime analysis.
+    columns:
+      - name: ticker
+        description: "Always ^VIX for this model."
+        tests:
+          - not_null
+      - name: trade_date
+        description: "Trading date for the VIX time series."
+        tests:
+          - not_null
+
+  - name: stg_stock_prices_index
+    description: >
+      Convenience view for NASDAQ index series, filtered from stg_stock_prices.
+      Currently includes:
+      - ^IXIC : NASDAQ Composite Index
+      - ^NDXE : NASDAQ-100 Equal Weight Index
+      Used as the base for index-level trend and breadth analysis.
+    columns:
+      - name: ticker
+        description: "Index symbol (^IXIC or ^NDXE)."
+        tests:
+          - not_null
+      - name: trade_date
+        description: "Trading date for the index level."
+        tests:
+          - not_null
+
+  # ---------------------------------------------------------------------------
+  # news headline staging model
+  # ---------------------------------------------------------------------------
+  - name: stg_news_headlines
     description: "Staging table for Google News headlines: typed, deduplicated by (ticker, news_ts), incremental on fetched_at."
     columns:
       - name: ticker

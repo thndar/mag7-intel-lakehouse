@@ -1,7 +1,7 @@
 {{ config(
     materialized = 'incremental',
     schema = 'staging',
-    alias = 'stock_prices',
+    alias = 'stock_prices_all',
     incremental_strategy = 'merge',
     unique_key = ['ticker', 'trade_date'],
     partition_by = { 'field': 'trade_date', 'data_type': 'date' },
@@ -11,7 +11,7 @@
 -- 1) Pull from raw, only new rows when incremental
 WITH source_incremental AS (
   SELECT *
-  FROM {{ source('raw', 'stock_prices') }}
+  FROM {{ source('raw', 'stock_prices_all') }}
   {% if is_incremental() %}
     -- only rows fetched after the current max
     WHERE TIMESTAMP(fetched_at) >

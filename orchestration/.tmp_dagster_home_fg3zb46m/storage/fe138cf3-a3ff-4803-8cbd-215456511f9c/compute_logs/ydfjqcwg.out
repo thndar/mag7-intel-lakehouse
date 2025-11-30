@@ -1,0 +1,4 @@
+[INFO] Resolved 10 tickers: ['AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA', 'TSLA', '^IXIC', '^NDXE', '^VIX']
+[INFO] Mode: incremental
+[INFO] Date range: 2025-11-30 → 2025-11-30
+[WARN] No data returned from yfinance for this range; nothing to write.
