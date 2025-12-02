@@ -1,0 +1,37 @@
+services:
+  dagster-webserver:
+    build: .
+    working_dir: /app
+    env_file:
+      - .env                    # load all env vars for dbt/meltano/dagster
+    environment:
+      DAGSTER_HOME: /app/orchestration
+      PYTHONPATH: /app
+    volumes:
+      - .:/app
+      - ${GCP_KEY_PATH_HOST}:/app/.keys
+    ports:
+      - "3000:3000"
+    command: >
+      dagster-webserver
+      -h 0.0.0.0
+      -p 3000
+      -w workspace.yaml
+    restart: unless-stopped
+
+  dagster-daemon:
+    build: .
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      DAGSTER_HOME: /app/orchestration
+      PYTHONPATH: /app
+    volumes:
+      - .:/app
+      - ${GCP_KEY_PATH_HOST}:/app/.keys
+    depends_on:
+      - dagster-webserver
+    command: >
+      dagster-daemon run
+    restart: unless-stopped

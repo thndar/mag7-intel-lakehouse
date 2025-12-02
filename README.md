@@ -401,6 +401,14 @@ Creat asset.py with following assets:
 
 ### 6.4 Run Dagster
 
+### 6.5 Containerize Dagster (optional)
+1. add workspace.yaml in project root
+2. add dagster-daemon in requirements.txt
+3. pip install -r requirements.txt
+4. create docker-compose.yml
+5. docker-compose build
+6. docker-compose up -d
+
 **in orchestration folder**
 ```bash
 dagster dev

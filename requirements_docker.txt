@@ -8,11 +8,8 @@ pydantic>=2.0
 # Data Extraction
 # ===============================
 beautifulsoup4>=4.12
-numpy>=1.23
 pandas>=2.0
 requests>=2.31
-# snscrape>=0.7.0    # Reddit/Twitter scraping
-# torch>=2.9.0
 torch==2.1.2+cpu
 --extra-index-url https://download.pytorch.org/whl/cpu
 transformers>=4.57.0
@@ -24,7 +21,6 @@ yfinance>=0.2.36
 google-cloud-bigquery>=3.12
 google-cloud-storage>=2.14
 google-auth>=2.23
-# google-auth-oauthlib>=1.2
 
 # ===============================
 # dbt (BigQuery)
@@ -44,29 +40,9 @@ dagster>=1.7
 dagster-webserver>=1.7
 
 # ===============================
-# Dashboard / Visualization
-# ===============================
-streamlit>=1.30
-altair>=5.0
-plotly>=5.18
-
-# ===============================
-# ML (Phase 2)
-# ===============================
-# scikit-learn>=1.4
-# xgboost>=2.0
-# lightgbm>=4.3
-# shap>=0.44
-
-# ===============================
 # Utils / Logging
 # ===============================
-tenacity>=8.2
-loguru>=0.7
-tqdm>=4.66
+# tenacity>=8.2
+# loguru>=0.7
+# tqdm>=4.66
 
-# ===============================
-# Notebook Support
-# ===============================
-jupyterlab>=4.0
-ipykernel>=6.29

@@ -1,0 +1,4 @@
+load_from:
+  - python_file:
+      relative_path: "orchestration/orchestration/definitions.py"  # relative to workplace.yml
+      attribute: "definitions"   # the definition object in definitions.py
