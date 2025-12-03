@@ -7,4 +7,4 @@
 select
   *
 from {{ ref('stg_stock_prices_all') }}
-where ticker in ('AAPL','MSFT','GOOGL','AMZN','META','TSLA','NVDA')
+where ticker in ('AAPL','MSFT','GOOGL','AMZN','META','TSLA','NVDA','IXIC','NDX','NDXE')
