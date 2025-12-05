@@ -108,3 +108,4 @@ dist/
 # data/
 downloads/
 raw_data/
+orchestration/dagster_home/history/runs.db
