@@ -74,6 +74,7 @@ DEFAULT_MAG7 = [t.strip() for t in os.getenv("TICKERS", "").split(",") if t.stri
 # NASDAQ index tickers we want to track
 DEFAULT_INDICES = [i.strip() for i in os.getenv("INDICES", "").split(",") if i.strip()] or [
     "^IXIC",   # NASDAQ Composite Index
+    "^NDX",   # NASDAQ-100 Market-cap Weighted Index
     "^NDXE",   # NASDAQ-100 Equal Weight Index
 ]
 
@@ -123,7 +124,7 @@ def get_universe_tickers(universe: str) -> List[str]:
 
     universe:
         - "mag7": Magnificent 7 only
-        - "mag7_with_indexes": Magnificent 7 + NASDAQ index tickers (^IXIC, ^NDXE)
+        - "mag7_with_indexes": Magnificent 7 + NASDAQ index tickers (^IXIC, ^NDX, ^NDXE)
     """
     universe = universe.lower()
     mag7 = DEFAULT_MAG7.copy()

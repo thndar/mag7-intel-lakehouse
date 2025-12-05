@@ -19,11 +19,10 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 
 # 1) NEWS EXTRACTOR  --------------------------------------------------------- #
-
 @asset(
     description=(
         "CSV files with Google News headlines and FinBERT sentiment for the "
-        "configured tickers and window, written to data/news/ (or similar)."
+        "configured tickers and window, written to data/news/."
     )
 )
 def news_csv(context: AssetExecutionContext) -> str:
@@ -100,7 +99,7 @@ def prices_csv(context: AssetExecutionContext) -> str:
     deps=[news_csv, prices_csv],
     description=(
         "Raw BigQuery tables loaded via Meltano from the news and stock CSVs "
-        "(e.g. mag7_intel_raw.news_headlines, mag7_intel_raw.stock_prices)."
+        "(mag7_intel_raw.news_headlines, mag7_intel_raw.stock_prices_all)."
     ),
 )
 def raw_bq_loaded(context: AssetExecutionContext, news_csv: str, prices_csv: str) -> None:
@@ -129,23 +128,21 @@ def raw_bq_loaded(context: AssetExecutionContext, news_csv: str, prices_csv: str
         raise RuntimeError(f"Meltano run load_csvs failed with code {result.returncode}")
 
 
-# 4) DBT TRANSFORMS (STAGING + MARTS)  -------------------------------------- #
+# 4) DBT TRANSFORMS (STAGING)  -------------------------------------- #
 
 @asset(
     deps=[raw_bq_loaded],
     description=(
-        "dbt models for staging and downstream marts, including:\n"
-        "- stg_stock_prices_ (+ all/mag7/vix/index splits)\n"
+        "dbt models for staging layer, type cast and de-dup for:\n"
+        "- stg_stock_prices_ all(+ all/mag7/vix/index splits)\n"
         "- stg_news_headlines (with FinBERT sentiment)\n"
-        "- any marts built on top of them."
+        "- split _all into mag7/vix/index\n"
     ),
 )
 def stg_stock_prices(context: AssetExecutionContext) -> None:
     """
-    Runs dbt to materialize stg_stock_prices and everything downstream.
-
-    Then split this into multiple dbt asset jobs later
-    (e.g. one for staging, one for marts).
+    materialize stg_stock_prices_all & stg_news_headlines.
+    split _all into mag7/vix/index views feeding next layer
     """
     context.log.info("Running dbt: stg_stock_prices+")
 
@@ -153,7 +150,44 @@ def stg_stock_prices(context: AssetExecutionContext) -> None:
         "dbt",
         "run",
         "-s",
-        "stg_stock_prices+ stg_news_headlines+",
+        "staging.*"
+    ]
+
+    result = subprocess.run(
+        dbt_cmd,
+        cwd=DBT_DIR,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    context.log.info(result.stdout)
+    if result.returncode != 0:
+        context.log.error(result.stderr)
+        raise RuntimeError(f"dbt run failed with code {result.returncode}")
+
+
+# 5) DBT TRANSFORMS (INTERMEDIATE)  -------------------------------------- #
+
+@asset(
+    deps=[stg_stock_prices],
+    description=(
+        "dbt models for intermediate, including:\n"
+        "- int_stock_prices_mag7_ta\n"
+        "- int_index_benchmark_join"
+    ),
+)
+def int_stock_prices_enrich(context: AssetExecutionContext) -> None:
+    """
+    materialize stock_prices_ta and index_benchmark_join in the intermediate dataset.
+    """
+    context.log.info("Running dbt: int_stock_prices_ta, int_index_benchmark_join")
+
+    dbt_cmd = [
+        "dbt",
+        "run",
+        "-s",
+        "intermediate.*"
     ]
 
     result = subprocess.run(
