@@ -4,8 +4,8 @@
 
 This project implements an end-to-end **data lakehouse + ELT pipeline** with:
 
-* Automated **daily ingestion** (stocks, news, macro)
-* BigQuery data warehouse modeling (raw → staging → marts)
+* Automated **daily extraction & ingestion** (stocks & news)
+* BigQuery data warehouse modeling (raw → staging → intermediate → marts)
 * Orchestration using **Dagger**
 * Analytics dashboard using **Streamlit**
 * Phase 2: ML feature store & predictive models
@@ -80,8 +80,10 @@ Put this inside, replace the **service-account json file location and GCP projec
 export GOOGLE_APPLICATION_CREDENTIALS="</absolute/path/to/your/service-account.json>"
 export GCP_PROJECT_ID="<your-gcp-project-id>"
 export GCP_REGION="US"
+export BQ_DATASET_PRIX="mag7_intel"
 export BQ_DATASET_RAW="mag7_intel_raw"
 export BQ_DATASET_STAGING="mag7_intel_staging"
+export BQ_DATASET_INTERMEDIATE="mag7_intel_intermediate"
 export BQ_DATASET_MARTS="mag7_intel_marts"
 ```
 
@@ -96,9 +98,10 @@ Put this inside:
 unset GOOGLE_APPLICATION_CREDENTIALS
 unset GCP_PROJECT_ID
 unset GCP_REGION
+unset BQ_DATASET_PRIX
 unset BQ_DATASET_RAW
 unset BQ_DATASET_STAGING
-unset BQ_DATASET_CORE
+unset BQ_DATASET_INTERMEDIATE
 unset BQ_DATASET_MARTS
 ```
 
@@ -263,25 +266,159 @@ mag7-intel/
 │
 ├── src/
 │   └── extractors/
-│       ├── stocks_extractor.py
-│       ├── news_extractor.py
-│       └── macro_ingestor.py
+│       ├── stocks_extractor.py          -> pulls yfinance data
+│       ├── news_extractor.py            -> pulls Google News, add FinBERT sentiment
+│       └── cnn_greed_fear_extractor.py  -> pulls CNN fear/greed index
+│
+├── data/
+│   └── news/                            -> folder storing raw news csv
+│   └── stocks/                          -> folder storing raw stock csv
+│
+├── meltano/                             -> ingestion to BQ
+│   └── meltano.yml                      -> config extractors, loaders & jobs
 │
 ├── dbt/
-├── meltano/
-├── orchestration/
+│   ├── models/                          -> transformations
+│   ├── seeds/                           -> to create static dims
+│   └── tests/                           -> 
+│
+├── orchestration/                       -> dagster orchstration
 │   └── daster_home/
 │   └── orchestration/
+│       ├── assets.py                    -> materialize assets & auto processes 
+│       └── definitions.py               -> asset & schedule config 
 │   └── orchestration_tests/
 │
-└── dashboards/
-    └── streamlit/
+├── dashboards/
+│   └── streamlit/                       -> UI for charts and signals
+│
+└── notebooks/                           -> Jupyter analysis & experiments
+
+Bigquery DW Datasets/
+├── mag7_intel_dim/                      -> Static dim tables (ticker, calendar)
+├── mag7_intel_raw/                      -> RAW landing tables
+├── mag7_intel_staging/                  -> cleaned staging
+├── mag7_intel_intermediate/             -> enriched tables
+├── mag7_intel_mart/                     -> fact tables, aggregates
+├── mag7_intel_ml/                       -> features (ATR, vol, returns)
+└── mag7_intel_pred/                     -> model signals/predictions
+
 ```
 
+---
+# 🌐 3. Data flow
+
+```
++-------------------------------------------------------------+
+|                         DATA SOURCES                        |
++-------------------------------------------------------------+
+| yfinance (prices) | Google News | CNN |       GELTGKG (BQ)  |
++-------------------------------------------------------------+
+                    |                                 |
+                    v                                 v
++-------------------------------------------------------------+
+|                         EXTRACTION                          |
++-------------------------------------------------------------+
+|  Python extractors (API, Scrappers)                         |
++-------------------------------------------------------------+
+                    |                                 |
+                    v                                 v
++-------------------------------------------------------------+
+|                         INGESTION                           |
++-------------------------------------------------------------+
+|      Meltano (taps/targets)  |                   dbt sql    |
++-------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                   BIGQUERY DATA WAREHOUSE                   |
++-------------------------------------------------------------+
+|      RAW  → STAGING → INTERMEDIATE → MART → ML → PRED       |
++-------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                    TRANSFORM - RAW LAYER                    |
+|                    (Raw / Ingested Data)                    |
++-------------------------------------------------------------+
+|  Sources:                                                   |
+|    - yfinance (Mag7 prices, index data, VIX)                |
+|    - News APIs / RSS                                        |
+|    - CNN Fear & Greed                                       |
+|                                                             |
+|  Storage:                                                   |
+|    - BigQuery dataset: mag7_intel_raw                       |
+|        - stock_prices_all                                   |
+|        - news_headlines                                     |
++-------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                  TRANSFORM - STAGING LAYER                  |
+|                     (Cleaned, Conformed)                    |
++-------------------------------------------------------------+
+|  Processing:                                                |
+|    - dbt staging model                                      |
+|    - ingestion from BQ public data GELT-gkg                 |
+|    - type casting, deduplication, key normalization         |
+|    - spliting _all into mag7/index/VIX                      |
+|                                                             |
+|  Storage:                                                   |
+|    - BigQuery datasets: mag7_intel_staging                  |
+|        - stock_prices_all                                   |
+|        - stock_prices_index                                 |
+|        - stock_prices_mag7                                  |
+|        - stock_prices_vix                                   |
+|        - news_headlines                                     |
+|        - news_gkg                                           |
++-------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|               TRANSFORM - INTERMEDIATE LAYER                |
+|                  (Enirch, Analytics-Ready)                  |
++-------------------------------------------------------------+
+|  Processing:                                                |
+|    - dbt intermediate model                                 |
+|    - add Technical Anaylsis (TA) Matrices                   |
+|    - add benchmark to tickers                               |
+|    - news (TBD)                                             |
+|                                                             |
+|  Storage:                                                   |
+|    - BigQuery datasets: mag7_intel_intermediate             |
+|        - stock_prices_mag7_ta                               |
+|        - index_benchmark_join                               |
+|        -                                                    |
++-------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                    TRANSFORM - MART LAYER                   |
+|                    (star, Analytics-Ready)                  |
++-------------------------------------------------------------+
+|  Processing:                                                |
+|    - fct                                                    |
+|    - star                                                   |
+|                                                             |
+|  Storage:                                                   |
+|    - BigQuery datasets: mag7_intel_mart                     |
+|    - mart_price_analytics  (returns, vol, drawdowns, etc.)  |
+|    - mart_factor_signals   (simple alphas, ranks)           |
+|    - mart_sentiment_daily  (news + gkg aggregates)          |
++-------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                       CONSUMPTION LAYER                     |
++-------------------------------------------------------------+
+|  - Jupyter / VS Code notebooks for EDA & research           |
+|  - Streamlit dashboards (Mag7 overview, signals, PnL)       |
++-------------------------------------------------------------+
+
+```
 
 ---
-
-# 📥 3. Data Extraction Scripts
+# 📥 4. Data Extraction Scripts
 
 ### 3.1 Stock Extractor
 
@@ -308,7 +445,7 @@ python src/extractors/news_extractor.py --tickers AAPL MSFT --window 7d
 
 ---
 
-# 📥 4. Meltano
+# 📥 5. Meltano
 
 ### 4.1 meltano install (add tap-csv)
 
@@ -331,7 +468,7 @@ jobs:
 meltano run load_csvs  # job name defined in yml
 ```
 
-# 🏗 5. dbt
+# 🏗 6. dbt
 
 ### 5.1 dbt seeds
 Create seed dims for analytical lookup.
@@ -375,7 +512,7 @@ dbt seed
 
 4. ?
 
-# 🤖 6. Dagster Orchestration
+# 🤖 7. Dagster Orchestration
 
 ### 6.1 Create dagster scaffold
 ```
@@ -416,7 +553,7 @@ dagster dev
 ```
 
 ---
-# 🌐 6. Running Streamlit Dashboard
+# 🌐 8. Running Streamlit Dashboard
 
 ```bash
 streamlit run dashboards/streamlit/app.py
