@@ -139,7 +139,7 @@ def raw_bq_loaded(context: AssetExecutionContext, news_csv: str, prices_csv: str
         "- split _all into mag7/vix/index\n"
     ),
 )
-def stg_stock_prices(context: AssetExecutionContext) -> None:
+def stg_cleanse(context: AssetExecutionContext) -> None:
     """
     materialize stg_stock_prices_all & stg_news_headlines.
     split _all into mag7/vix/index views feeding next layer
@@ -170,24 +170,99 @@ def stg_stock_prices(context: AssetExecutionContext) -> None:
 # 5) DBT TRANSFORMS (INTERMEDIATE)  -------------------------------------- #
 
 @asset(
-    deps=[stg_stock_prices],
+    deps=[stg_cleanse],
     description=(
         "dbt models for intermediate, including:\n"
         "- int_stock_prices_mag7_ta\n"
-        "- int_index_benchmark_join"
+        "- int_stock_prices_index_ta\n"
+        "- int_stock_prices_mag7_ta_benchmark"
     ),
 )
-def int_stock_prices_enrich(context: AssetExecutionContext) -> None:
+def int_enrich(context: AssetExecutionContext) -> None:
     """
-    materialize stock_prices_ta and index_benchmark_join in the intermediate dataset.
+    materialize mag7_ta, index_ta and mag7_ta_benchmark in the intermediate dataset.
     """
-    context.log.info("Running dbt: int_stock_prices_ta, int_index_benchmark_join")
+    context.log.info("Running dbt: int_..mag7_ta, int_..index_ta, int_..mag7_ta_benchmark")
 
     dbt_cmd = [
         "dbt",
         "run",
         "-s",
         "intermediate.*"
+    ]
+
+    result = subprocess.run(
+        dbt_cmd,
+        cwd=DBT_DIR,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    context.log.info(result.stdout)
+    if result.returncode != 0:
+        context.log.error(result.stderr)
+        raise RuntimeError(f"dbt run failed with code {result.returncode}")
+
+
+# 5) DBT TRANSFORMS (CORE)  -------------------------------------- #
+
+@asset(
+    deps=[int_enrich],
+    description=(
+        "dbt models for core, including:\n"
+        "- fact_prices\n"
+        "- fact_regimes"
+    ),
+)
+def core_build(context: AssetExecutionContext) -> None:
+    """
+    materialize face_prices & fact_regimes in the core dataset.
+    """
+    context.log.info("Running dbt: fact_prices, factregimes")
+
+    dbt_cmd = [
+        "dbt",
+        "run",
+        "-s",
+        "core.*"
+    ]
+
+    result = subprocess.run(
+        dbt_cmd,
+        cwd=DBT_DIR,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    context.log.info(result.stdout)
+    if result.returncode != 0:
+        context.log.error(result.stderr)
+        raise RuntimeError(f"dbt run failed with code {result.returncode}")
+
+
+# 6) DBT TRANSFORMS (MART)  -------------------------------------- #
+
+@asset(
+    deps=[core_build],
+    description=(
+        "dbt models for mart, including:\n"
+        "- mart_stock_prices_regimes\n"
+        "- mart_stock_prices_regime_summary"
+    ),
+)
+def mart_present(context: AssetExecutionContext) -> None:
+    """
+    materialize stock_price_regimes and stock_price_regime_summary in the mart dataset.
+    """
+    context.log.info("Running dbt: stock_price_regimes, stock_price_regime_summary")
+
+    dbt_cmd = [
+        "dbt",
+        "run",
+        "-s",
+        "mart.*"
     ]
 
     result = subprocess.run(

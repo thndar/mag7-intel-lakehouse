@@ -66,7 +66,7 @@ matched AS (
     d.ticker,
     d.company_name
   FROM flattened f
-  JOIN `mag7_intel_dims.dim_ticker` d
+  JOIN `mag7_intel_core.dim_ticker` d
     ON REGEXP_CONTAINS(UPPER(f.organization), UPPER(d.company_name))
 )
 

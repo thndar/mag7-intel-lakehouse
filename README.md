@@ -308,6 +308,7 @@ Bigquery DW Datasets/
 ---
 # 🌐 3. Data Pipeline
 
+![Infographic](assets/architect.png)
 ```
 +-------------------------------------------------------------+
 |                         DATA SOURCES                        |

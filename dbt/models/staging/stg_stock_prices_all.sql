@@ -35,7 +35,20 @@ typed AS (
   FROM source_incremental
 ),
 
--- 3) Dedup within this batch: keep latest fetched per (ticker, trade_date)
+-- 3) Drop rows where ALL OHLC + adj_close are null
+filtered AS (
+  SELECT *
+  FROM typed
+  WHERE NOT (
+    open      IS NULL AND
+    high      IS NULL AND
+    low       IS NULL AND
+    close     IS NULL AND
+    adj_close IS NULL
+  )
+),
+
+-- 4) Dedup within this batch: keep latest fetched per (ticker, trade_date)
 deduped AS (
   SELECT
     *,
@@ -43,7 +56,7 @@ deduped AS (
       PARTITION BY ticker, trade_date
       ORDER BY fetched_at DESC
     ) AS rn
-  FROM typed
+  FROM filtered
 )
 
 SELECT
