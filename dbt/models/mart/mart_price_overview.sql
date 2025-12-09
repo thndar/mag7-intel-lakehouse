@@ -2,7 +2,7 @@
     materialized = 'table',
     schema       = 'mart',
     alias        = 'price_overview',
-    tags         = ['mart', 'overview', 'price']
+    tags         = ['mart', 'price', 'overview']
 ) }}
 
 -- 1) Base price facts (all assets: Mag7 + indices)

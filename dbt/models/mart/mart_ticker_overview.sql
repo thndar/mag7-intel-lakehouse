@@ -2,7 +2,7 @@
     materialized = 'table',
     schema       = 'mart',
     alias        = 'ticker_overview',
-    tags         = ['mart', 'overview', 'ticker']
+    tags         = ['mart', 'ticker', 'overview']
 ) }}
 
 -- 1) Base data from regime fact table

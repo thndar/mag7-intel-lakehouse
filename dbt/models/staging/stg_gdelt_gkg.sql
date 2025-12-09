@@ -21,7 +21,7 @@ WITH gkg AS (
     DocumentIdentifier AS url,
     V2Organizations AS organizations_raw,
     V2Themes AS themes_raw,
-    V2Tone AS tone_raw
+    SAFE_CAST(V2Tone AS FLOAT64) AS tone_raw
   FROM {{ source('gdeltv2', 'gkg_partitioned') }}
   WHERE DATE IS NOT NULL
 

@@ -30,6 +30,7 @@ env/
 # DO NOT commit real credentials
 .env
 .env.*
+.keys/
 *.key
 *.pem
 *.p12
@@ -60,7 +61,12 @@ dbt/.user.yml
 # DAGSTER
 ########################################
 # Dagster temp files
-dagster_home/
+.log_queue/
+.nux/
+history/
+logs/
+schedules/
+storage/
 .telemetry
 .tmp_dagster_home*
 
@@ -82,7 +88,6 @@ logs/
 **/cache/
 __snapshots__/
 .donotgit/
-.keys/
 
 ########################################
 # OS / EDITOR JUNK

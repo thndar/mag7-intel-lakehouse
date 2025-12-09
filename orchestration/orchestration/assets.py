@@ -51,7 +51,39 @@ def news_csv(context: AssetExecutionContext) -> str:
     return str(csv_path)
 
 
-# 2) PRICES EXTRACTOR  ------------------------------------------------------- #
+# 2) CNN FEAR & GREED EXTRACTOR  --------------------------------------------------------- #
+@asset(
+    description=(
+        "CSV files with CNN Fear & Greed indexes for the "
+        "configured tickers and window, written to data/fng/."
+    )
+)
+def fng_csv(context: AssetExecutionContext) -> str:
+    """
+    Runs the fng extractor and returns the path (or label) for the latest CSV - 
+    run_fng_extractor() writes a Meltano-friendly CSV under data/fng/.
+    """
+    # Lazy import so Dagster can load even if src isn't on path in some contexts
+    from src.extractors.fng_extractor import run_fng_extractor
+
+    # Reasonable defaults – adjust to match your CLI behaviour
+    from src.extractors.fng_extractor import DEFAULT_DIRECTION as direction
+    from src.extractors.fng_extractor import DEFAULT_DAYS as window
+
+    context.log.info(f"Running fng extractor for direction={direction}, window={window}")
+    csv_path = run_fng_extractor(direction, window)
+
+    if not csv_path:
+        context.log.warning(
+            "run_fng_extractor() did not return a path; using empty string."
+        )
+        return ""
+
+    context.log.info(f"fng extractor wrote CSV to: {csv_path}")
+    return str(csv_path)
+
+
+# 3) PRICES EXTRACTOR  ------------------------------------------------------- #
 
 @asset(
     description=(
@@ -93,12 +125,12 @@ def prices_csv(context: AssetExecutionContext) -> str:
     return str(csv_path)
 
 
-# 3) MELTANO LOAD (RAW → BigQuery)  ----------------------------------------- #
+# 4) MELTANO LOAD (RAW → BigQuery)  ----------------------------------------- #
 
 @asset(
-    deps=[news_csv, prices_csv],
+    deps=[news_csv, prices_csv, fng_csv],
     description=(
-        "Raw BigQuery tables loaded via Meltano from the news and stock CSVs "
+        "Raw BigQuery tables loaded via Meltano from the news, fng and stock CSVs "
         "(mag7_intel_raw.news_headlines, mag7_intel_raw.stock_prices_all)."
     ),
 )
@@ -112,7 +144,11 @@ def raw_bq_loaded(context: AssetExecutionContext, news_csv: str, prices_csv: str
     """
     context.log.info("Running Meltano job: load_csvs")
     context.log.info(f"news_csv asset: {news_csv}")
+    context.log.info(f"fng_csv asset: {fng_csv}")
     context.log.info(f"prices_csv asset: {prices_csv}")
+    context.log.info(f"MELTANO_DIR={MELTANO_DIR}")
+    context.log.info(f"cwd exists? {Path(MELTANO_DIR).exists()}")
+    context.log.info(f"ls MELTANO_DIR: {list(Path(MELTANO_DIR).iterdir()) if Path(MELTANO_DIR).exists() else 'NO DIR'}")
 
     result = subprocess.run(
         ["meltano", "run", "load_csvs"],
@@ -128,7 +164,7 @@ def raw_bq_loaded(context: AssetExecutionContext, news_csv: str, prices_csv: str
         raise RuntimeError(f"Meltano run load_csvs failed with code {result.returncode}")
 
 
-# 4) DBT TRANSFORMS (STAGING)  -------------------------------------- #
+# 5) DBT TRANSFORMS (STAGING)  -------------------------------------- #
 
 @asset(
     deps=[raw_bq_loaded],
@@ -167,7 +203,7 @@ def stg_cleanse(context: AssetExecutionContext) -> None:
         raise RuntimeError(f"dbt run failed with code {result.returncode}")
 
 
-# 5) DBT TRANSFORMS (INTERMEDIATE)  -------------------------------------- #
+# 6) DBT TRANSFORMS (INTERMEDIATE)  -------------------------------------- #
 
 @asset(
     deps=[stg_cleanse],
@@ -205,7 +241,7 @@ def int_enrich(context: AssetExecutionContext) -> None:
         raise RuntimeError(f"dbt run failed with code {result.returncode}")
 
 
-# 5) DBT TRANSFORMS (CORE)  -------------------------------------- #
+# 7) DBT TRANSFORMS (CORE)  -------------------------------------- #
 
 @asset(
     deps=[int_enrich],
@@ -242,7 +278,7 @@ def core_build(context: AssetExecutionContext) -> None:
         raise RuntimeError(f"dbt run failed with code {result.returncode}")
 
 
-# 6) DBT TRANSFORMS (MART)  -------------------------------------- #
+# 8) DBT TRANSFORMS (MART)  -------------------------------------- #
 
 @asset(
     deps=[core_build],

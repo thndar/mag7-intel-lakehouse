@@ -4,7 +4,7 @@ services:
     working_dir: /app
     user: "0:0"
     env_file:
-      - .env                    # load all env vars for dbt/meltano/dagster
+      - .env.docker             # env specifically for docker
     environment:
       DAGSTER_HOME: /app/orchestration/dagster_home
       PYTHONPATH: /app/orchestration

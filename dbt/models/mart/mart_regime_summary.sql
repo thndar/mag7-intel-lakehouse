@@ -2,7 +2,7 @@
     materialized = 'table',
     schema       = 'mart',
     alias        = 'regime_summary',
-    tags         = ['mart', 'alpha', 'regime-summary']
+    tags         = ['mart', 'regime-summary', 'alpha']
 ) }}
 
 WITH base AS (

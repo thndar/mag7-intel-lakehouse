@@ -139,21 +139,8 @@ combined AS (
     FROM price_risk p
     LEFT JOIN regime_risk r
       ON p.ticker = r.ticker
-),
-
--- 4) Attach metadata (sector, industry, etc.)
-final AS (
-    SELECT
-        c.*,
-        d.company_name,
-        d.sector,
-        d.industry,
-        d.exchange
-    FROM combined c
-    LEFT JOIN {{ source('core', 'dim_ticker') }} d
-      ON c.ticker = d.ticker
 )
 
 SELECT *
-FROM final
-ORDER BY ticker;
+FROM combined
+ORDER BY ticker

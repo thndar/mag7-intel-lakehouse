@@ -24,6 +24,11 @@ plugins:
             keys: ["ticker", "timestamp"]
             delimiter: ","
             header: true
+          - entity: fng
+            path: "../data/fng/"
+            keys: ["date"]
+            delimiter: ","
+            header: true
 
   loaders:
   - name: target-bigquery

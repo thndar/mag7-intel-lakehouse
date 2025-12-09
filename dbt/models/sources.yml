@@ -8,6 +8,7 @@ sources:
     tables:
       - name: stock_prices_all
       - name: news_headlines
+      - name: fng
 
 # 2. BQ public datasets (GDELT gkg)
   - name: gdeltv2
@@ -33,7 +34,7 @@ sources:
     database: "{{ env_var('GCP_PROJECT_ID') }}"
     schema: "{{ env_var('BQ_DATASET_INTERMEDIATE') }}"
     tables:
-#      - name: mag7_ta
+      - name: mag7_ta
       - name: mag7_ta_benchmark
 #      - name: sa
 
