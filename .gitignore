@@ -58,7 +58,7 @@ dbt/.user.yml
 *.meltano.lock
 
 ########################################
-# DAGSTER
+# Dagster runtime / state
 ########################################
 # Dagster temp files
 .log_queue/
@@ -69,6 +69,11 @@ schedules/
 storage/
 .telemetry
 .tmp_dagster_home*
+.orchestration/dagster_home/history/
+.orchestration/dagster_home/schedules/
+.orchestration/dagster_home/storage/
+.orchestration/dagster_home/*.db
+.orchestration/dagster_home/**/*.db
 
 ########################################
 # STREAMLIT
