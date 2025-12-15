@@ -37,7 +37,7 @@ models:
 
 seeds:
   mag7_intel:       # your project name
-    +schema: dims   # concat with default dataset prefix to form the full dataset name
+    +schema: core   # move dims into core
 
     tickers:
       +alias: dim_ticker

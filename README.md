@@ -289,8 +289,10 @@ mag7-intel/
 │       └── definitions.py               -> asset & schedule config 
 │   └── orchestration_tests/
 │
-├── dashboards/
-│   └── streamlit/                       -> UI for charts and signals
+├── streamlit_app/                       -> UI for charts and signals
+│   └── core/
+│   └── pages/
+│   └── app.py
 │
 └── notebooks/                           -> Jupyter analysis & experiments
 
@@ -308,6 +310,7 @@ Bigquery DW Datasets/
 ---
 # 🌐 3. Data Pipeline
 
+![Infographic](assets/architect.png)
 ```
 +-------------------------------------------------------------+
 |                         DATA SOURCES                        |
@@ -490,7 +493,7 @@ seeds:
 dbt seed
 ```
 
-### 5.2 staging 
+### 5.2 staging (data cleansing)
 
 1. Create source.yml
 
@@ -510,7 +513,13 @@ dbt seed
 
 3. pull in GDELT & Google Trends from pub data
 
+### 5.3 intermediate (data enrichment)
+
 4. ?
+### 5.4 core (atomic & reusable facts & dims)
+
+### 5.5 mart (analytical summaries & aggregation)
+
 
 # 🤖 7. Dagster Orchestration
 

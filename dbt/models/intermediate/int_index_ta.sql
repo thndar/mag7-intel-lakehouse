@@ -1,16 +1,16 @@
 {{ config( 
     materialized = 'table',
     schema = 'intermediate',
-    alias = 'stock_prices_mag7_ta',
+    alias = 'index_ta',
     partition_by = {
       "field": "trade_date",
       "data_type": "date"
     },
     cluster_by = ["ticker"],
-    tags = ["intermediate", "ta", "mag7"]
+    tags = ["intermediate", "ta", "index"]
 ) }}
 
--- 1. Get base prices from staging table
+-- 1. Get base index prices from staging table
 WITH prices AS (
   SELECT
     trade_date,
@@ -21,7 +21,7 @@ WITH prices AS (
     close,
     adj_close,
     volume
-  FROM {{ source('staging', 'stock_prices_mag7') }}
+  FROM {{ ref('stg_index') }}
 ),
 
 -- 2. Add lags needed for returns & ATR calc
@@ -30,6 +30,7 @@ lagged AS (
     *,
     LAG(adj_close, 1)  OVER (PARTITION BY ticker ORDER BY trade_date) AS prev_adj_close_1,
     LAG(adj_close, 5)  OVER (PARTITION BY ticker ORDER BY trade_date) AS prev_adj_close_5,
+    LAG(adj_close, 10) OVER (PARTITION BY ticker ORDER BY trade_date) AS prev_adj_close_10,
     LAG(adj_close, 20) OVER (PARTITION BY ticker ORDER BY trade_date) AS prev_adj_close_20,
     LAG(close, 1)      OVER (PARTITION BY ticker ORDER BY trade_date) AS prev_close
   FROM prices
@@ -42,6 +43,7 @@ returns AS (
     -- 1-day, 5-day & 20-day returns
     SAFE_DIVIDE(adj_close - prev_adj_close_1, prev_adj_close_1) AS return_1d,
     SAFE_DIVIDE(adj_close - prev_adj_close_5,  prev_adj_close_5)  AS return_5d,
+    SAFE_DIVIDE(adj_close - prev_adj_close_10, prev_adj_close_10) AS return_10d,
     SAFE_DIVIDE(adj_close - prev_adj_close_20, prev_adj_close_20) AS return_20d,
 
     -- True range for ATR
@@ -51,9 +53,20 @@ returns AS (
       ABS(low  - prev_close)
     ) AS true_range
   FROM lagged
+),
+
+-- 4. Add *forward* prices for forward-return calculations
+forward AS (
+  SELECT
+    *,
+    LEAD(adj_close,  1) OVER (PARTITION BY ticker ORDER BY trade_date) AS next_adj_close_1,
+    LEAD(adj_close,  5) OVER (PARTITION BY ticker ORDER BY trade_date) AS next_adj_close_5,
+    LEAD(adj_close, 10) OVER (PARTITION BY ticker ORDER BY trade_date) AS next_adj_close_10,
+    LEAD(adj_close, 20) OVER (PARTITION BY ticker ORDER BY trade_date) AS next_adj_close_20
+  FROM returns
 )
 
--- 4. Construct final table with rolling/window TA features
+-- 5. Construct final table with rolling/window TA features + forward returns
 SELECT
   trade_date,
   ticker,
@@ -64,10 +77,17 @@ SELECT
   adj_close,
   volume,
 
-  -- === Returns ===
+  -- === Backward returns (historical) ===
   return_1d,
   return_5d,
+  return_10d,
   return_20d,
+
+  -- === Forward returns (for alpha / regime analysis) ===
+  SAFE_DIVIDE(next_adj_close_1  - adj_close, adj_close) AS fwd_return_1d,
+  SAFE_DIVIDE(next_adj_close_5  - adj_close, adj_close) AS fwd_return_5d,
+  SAFE_DIVIDE(next_adj_close_10 - adj_close, adj_close) AS fwd_return_10d,
+  SAFE_DIVIDE(next_adj_close_20 - adj_close, adj_close) AS fwd_return_20d,
 
   -- === Rolling volatility (stddev of daily returns) ===
   STDDEV_SAMP(return_1d) OVER (
@@ -101,6 +121,19 @@ SELECT
     ORDER BY trade_date
     ROWS BETWEEN 19 PRECEDING AND CURRENT ROW
   ) AS rolling_min_20d,
+
+  -- === Rolling price levels (200-day high/low) ===
+  MAX(adj_close) OVER (
+    PARTITION BY ticker
+    ORDER BY trade_date
+    ROWS BETWEEN 199 PRECEDING AND CURRENT ROW
+  ) AS rolling_max_200d,
+
+  MIN(adj_close) OVER (
+    PARTITION BY ticker
+    ORDER BY trade_date
+    ROWS BETWEEN 199 PRECEDING AND CURRENT ROW
+  ) AS rolling_min_200d,
 
   -- === Price z-score vs 20-day window ===
   (
@@ -145,6 +178,6 @@ SELECT
     PARTITION BY ticker
     ORDER BY trade_date
     ROWS BETWEEN 199 PRECEDING AND CURRENT ROW
-  ) AS ma_200,      -- long-term
+  ) AS ma_200       -- long-term
 
-FROM returns
+FROM forward

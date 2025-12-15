@@ -30,6 +30,7 @@ env/
 # DO NOT commit real credentials
 .env
 .env.*
+.keys/
 *.key
 *.pem
 *.p12
@@ -59,11 +60,11 @@ dbt/.user.yml
 ########################################
 # DAGSTER RUNTIME / STATE
 ########################################
-orchestration/dagster_home/history/
-orchestration/dagster_home/schedules/
-orchestration/dagster_home/storage/
-orchestration/dagster_home/*.db
-orchestration/dagster_home/**/*.db
+# Dagger engine & temp files
+.dagger/
+dagger-engine/
+dagger-cache/
+*dagger*.log
 
 ########################################
 # STREAMLIT
@@ -83,7 +84,6 @@ logs/
 **/cache/
 __snapshots__/
 .donotgit/
-.keys/
 
 ########################################
 # OS / EDITOR JUNK
@@ -107,4 +107,4 @@ dist/
 # If you store temporary downloads locally
 # data/
 downloads/
-raw_data/
+data/**

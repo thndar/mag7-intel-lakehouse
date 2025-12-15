@@ -51,7 +51,39 @@ def news_csv(context: AssetExecutionContext) -> str:
     return str(csv_path)
 
 
-# 2) PRICES EXTRACTOR  ------------------------------------------------------- #
+# 2) CNN FEAR & GREED EXTRACTOR  --------------------------------------------------------- #
+@asset(
+    description=(
+        "CSV files with CNN Fear & Greed indexes for the "
+        "configured tickers and window, written to data/fng/."
+    )
+)
+def fng_csv(context: AssetExecutionContext) -> str:
+    """
+    Runs the fng extractor and returns the path (or label) for the latest CSV - 
+    run_fng_extractor() writes a Meltano-friendly CSV under data/fng/.
+    """
+    # Lazy import so Dagster can load even if src isn't on path in some contexts
+    from src.extractors.fng_extractor import run_fng_extractor
+
+    # Reasonable defaults – adjust to match your CLI behaviour
+    from src.extractors.fng_extractor import DEFAULT_DIRECTION as direction
+    from src.extractors.fng_extractor import DEFAULT_DAYS as window
+
+    context.log.info(f"Running fng extractor for direction={direction}, window={window}")
+    csv_path = run_fng_extractor(direction, window)
+
+    if not csv_path:
+        context.log.warning(
+            "run_fng_extractor() did not return a path; using empty string."
+        )
+        return ""
+
+    context.log.info(f"fng extractor wrote CSV to: {csv_path}")
+    return str(csv_path)
+
+
+# 3) PRICES EXTRACTOR  ------------------------------------------------------- #
 
 @asset(
     description=(
@@ -93,12 +125,12 @@ def prices_csv(context: AssetExecutionContext) -> str:
     return str(csv_path)
 
 
-# 3) MELTANO LOAD (RAW → BigQuery)  ----------------------------------------- #
+# 4) MELTANO LOAD (RAW → BigQuery)  ----------------------------------------- #
 
 @asset(
-    deps=[news_csv, prices_csv],
+    deps=[news_csv, prices_csv, fng_csv],
     description=(
-        "Raw BigQuery tables loaded via Meltano from the news and stock CSVs "
+        "Raw BigQuery tables loaded via Meltano from the news, fng and stock CSVs "
         "(mag7_intel_raw.news_headlines, mag7_intel_raw.stock_prices_all)."
     ),
 )
@@ -112,7 +144,11 @@ def raw_bq_loaded(context: AssetExecutionContext, news_csv: str, prices_csv: str
     """
     context.log.info("Running Meltano job: load_csvs")
     context.log.info(f"news_csv asset: {news_csv}")
+    context.log.info(f"fng_csv asset: {fng_csv}")
     context.log.info(f"prices_csv asset: {prices_csv}")
+    context.log.info(f"MELTANO_DIR={MELTANO_DIR}")
+    context.log.info(f"cwd exists? {Path(MELTANO_DIR).exists()}")
+    context.log.info(f"ls MELTANO_DIR: {list(Path(MELTANO_DIR).iterdir()) if Path(MELTANO_DIR).exists() else 'NO DIR'}")
 
     result = subprocess.run(
         ["meltano", "run", "load_csvs"],
@@ -128,7 +164,7 @@ def raw_bq_loaded(context: AssetExecutionContext, news_csv: str, prices_csv: str
         raise RuntimeError(f"Meltano run load_csvs failed with code {result.returncode}")
 
 
-# 4) DBT TRANSFORMS (STAGING)  -------------------------------------- #
+# 5) DBT TRANSFORMS (STAGING)  -------------------------------------- #
 
 @asset(
     deps=[raw_bq_loaded],
@@ -139,7 +175,7 @@ def raw_bq_loaded(context: AssetExecutionContext, news_csv: str, prices_csv: str
         "- split _all into mag7/vix/index\n"
     ),
 )
-def stg_stock_prices(context: AssetExecutionContext) -> None:
+def stg_cleanse(context: AssetExecutionContext) -> None:
     """
     materialize stg_stock_prices_all & stg_news_headlines.
     split _all into mag7/vix/index views feeding next layer
@@ -167,27 +203,102 @@ def stg_stock_prices(context: AssetExecutionContext) -> None:
         raise RuntimeError(f"dbt run failed with code {result.returncode}")
 
 
-# 5) DBT TRANSFORMS (INTERMEDIATE)  -------------------------------------- #
+# 6) DBT TRANSFORMS (INTERMEDIATE)  -------------------------------------- #
 
 @asset(
-    deps=[stg_stock_prices],
+    deps=[stg_cleanse],
     description=(
         "dbt models for intermediate, including:\n"
         "- int_stock_prices_mag7_ta\n"
-        "- int_index_benchmark_join"
+        "- int_stock_prices_index_ta\n"
+        "- int_stock_prices_mag7_ta_benchmark"
     ),
 )
-def int_stock_prices_enrich(context: AssetExecutionContext) -> None:
+def int_enrich(context: AssetExecutionContext) -> None:
     """
-    materialize stock_prices_ta and index_benchmark_join in the intermediate dataset.
+    materialize mag7_ta, index_ta and mag7_ta_benchmark in the intermediate dataset.
     """
-    context.log.info("Running dbt: int_stock_prices_ta, int_index_benchmark_join")
+    context.log.info("Running dbt: int_..mag7_ta, int_..index_ta, int_..mag7_ta_benchmark")
 
     dbt_cmd = [
         "dbt",
         "run",
         "-s",
         "intermediate.*"
+    ]
+
+    result = subprocess.run(
+        dbt_cmd,
+        cwd=DBT_DIR,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    context.log.info(result.stdout)
+    if result.returncode != 0:
+        context.log.error(result.stderr)
+        raise RuntimeError(f"dbt run failed with code {result.returncode}")
+
+
+# 7) DBT TRANSFORMS (CORE)  -------------------------------------- #
+
+@asset(
+    deps=[int_enrich],
+    description=(
+        "dbt models for core, including:\n"
+        "- fact_prices\n"
+        "- fact_regimes"
+    ),
+)
+def core_build(context: AssetExecutionContext) -> None:
+    """
+    materialize face_prices & fact_regimes in the core dataset.
+    """
+    context.log.info("Running dbt: fact_prices, factregimes")
+
+    dbt_cmd = [
+        "dbt",
+        "run",
+        "-s",
+        "core.*"
+    ]
+
+    result = subprocess.run(
+        dbt_cmd,
+        cwd=DBT_DIR,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    context.log.info(result.stdout)
+    if result.returncode != 0:
+        context.log.error(result.stderr)
+        raise RuntimeError(f"dbt run failed with code {result.returncode}")
+
+
+# 8) DBT TRANSFORMS (MART)  -------------------------------------- #
+
+@asset(
+    deps=[core_build],
+    description=(
+        "dbt models for mart, including:\n"
+        "- mart_stock_prices_regimes\n"
+        "- mart_stock_prices_regime_summary"
+    ),
+)
+def mart_present(context: AssetExecutionContext) -> None:
+    """
+    materialize stock_price_regimes and stock_price_regime_summary in the mart dataset.
+    """
+    context.log.info("Running dbt: stock_price_regimes, stock_price_regime_summary")
+
+    dbt_cmd = [
+        "dbt",
+        "run",
+        "-s",
+        "mart.*"
     ]
 
     result = subprocess.run(

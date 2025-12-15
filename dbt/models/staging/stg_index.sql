@@ -1,10 +1,10 @@
 {{ config(
     materialized = 'view',
     schema = 'staging',
-    alias = 'stock_prices_vix'
+    alias = 'index'
 ) }}
 
 select
   *
 from {{ ref('stg_stock_prices_all') }}
-where ticker = '^VIX'
+where ticker in ('^IXIC', '^NDX', '^NDXE')
