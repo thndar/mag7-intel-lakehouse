@@ -27,7 +27,8 @@ st.info(
 st.markdown("""
 ### What you can explore
 - **Overview** – latest core signal snapshot across tickers
-- **Core Signal** – signal history, persistence, and ranking
+- **Signal by Bucket Values** – signal history, persistence, and ranking
+- **Signal by Momentum/Reversion** – classifies each trading day into one of three actionable states
 - **Ticker Deep Dive** – price context + regime corridor + signal locator
 - **Regimes** – distribution and explanatory regime behaviour
 - **Risk Context** – volatility/drawdown + macro risk overlays (no gating)
