@@ -5,8 +5,17 @@
     tags         = ['mart', 'risk', 'overview']
 ) }}
 
+-- 0) Date anchor (explicit as-of + coverage window)
+WITH date_anchor AS (
+    SELECT
+        MIN(trade_date) AS window_start_date,
+        MAX(trade_date) AS window_end_date,
+        MAX(trade_date) AS asof_date
+    FROM {{ ref('fact_prices') }}
+),
+
 -- 1) Price-based risk metrics (absolute risk, drawdown)
-WITH base_prices AS (
+base_prices AS (
     SELECT
         ticker,
         trade_date,
@@ -69,18 +78,18 @@ price_risk AS (
     GROUP BY ticker
 ),
 
--- 2) Regime / excess-return-based risk metrics (tracking error, regime risk)
-base_regimes AS (
+-- 2) Benchmark-relative risk (tracking error etc.) from fact_prices
+base_relative AS (
     SELECT
         ticker,
         ndx_excess_return_1d,
-        ndxe_excess_return_1d,
-        regime_bucket_10,
-        combined_regime_style
-    FROM {{ ref('fact_regimes') }}
+        ndxe_excess_return_1d
+    FROM {{ ref('fact_prices') }}
+    WHERE ndx_excess_return_1d IS NOT NULL
+       OR ndxe_excess_return_1d IS NOT NULL
 ),
 
-regime_risk AS (
+relative_risk AS (
     SELECT
         ticker,
 
@@ -90,23 +99,38 @@ regime_risk AS (
 
         -- how often excess return is negative (active risk pain)
         AVG(CASE WHEN ndx_excess_return_1d  < 0 THEN 1 ELSE 0 END) AS ndx_excess_negative_rate,
-        AVG(CASE WHEN ndxe_excess_return_1d < 0 THEN 1 ELSE 0 END) AS ndxe_excess_negative_rate,
+        AVG(CASE WHEN ndxe_excess_return_1d < 0 THEN 1 ELSE 0 END) AS ndxe_excess_negative_rate
+    FROM base_relative
+    GROUP BY ticker
+),
+
+-- 3) Regime distribution risk from fact_regimes
+base_regimes AS (
+    SELECT
+        ticker,
+        regime_bucket_10,
+        combined_regime_style
+    FROM {{ ref('fact_regimes') }}
+),
+
+regime_dist AS (
+    SELECT
+        ticker,
 
         -- regime distribution (value vs momentum vs overextended)
-        COUNTIF(regime_bucket_10 BETWEEN 1 AND 3)  / COUNT(*) AS pct_time_value_regimes,
-        COUNTIF(regime_bucket_10 BETWEEN 4 AND 7)  / COUNT(*) AS pct_time_mid_regimes,
-        COUNTIF(regime_bucket_10 BETWEEN 8 AND 10) / COUNT(*) AS pct_time_momentum_regimes,
+        SAFE_DIVIDE(COUNTIF(regime_bucket_10 BETWEEN 1 AND 3),  COUNT(*)) AS pct_time_value_regimes,
+        SAFE_DIVIDE(COUNTIF(regime_bucket_10 BETWEEN 4 AND 7),  COUNT(*)) AS pct_time_mid_regimes,
+        SAFE_DIVIDE(COUNTIF(regime_bucket_10 BETWEEN 8 AND 10), COUNT(*)) AS pct_time_momentum_regimes,
 
-        COUNTIF(combined_regime_style = 'deep_value')   / COUNT(*) AS pct_time_deep_value,
-        COUNTIF(combined_regime_style = 'value_setup')  / COUNT(*) AS pct_time_value_setup,
-        COUNTIF(combined_regime_style = 'momentum')     / COUNT(*) AS pct_time_momentum,
-        COUNTIF(combined_regime_style = 'overextended') / COUNT(*) AS pct_time_overextended
-
+        SAFE_DIVIDE(COUNTIF(combined_regime_style = 'deep_value'),   COUNT(*)) AS pct_time_deep_value,
+        SAFE_DIVIDE(COUNTIF(combined_regime_style = 'value_setup'),  COUNT(*)) AS pct_time_value_setup,
+        SAFE_DIVIDE(COUNTIF(combined_regime_style = 'momentum'),     COUNT(*)) AS pct_time_momentum,
+        SAFE_DIVIDE(COUNTIF(combined_regime_style = 'overextended'), COUNT(*)) AS pct_time_overextended
     FROM base_regimes
     GROUP BY ticker
 ),
 
--- 3) Combine price risk + regime risk
+-- 4) Combine price risk + relative risk + regime distribution
 combined AS (
     SELECT
         p.ticker,
@@ -123,22 +147,26 @@ combined AS (
         p.max_drawdown,
         p.n_trading_days,
 
-        -- regime / relative risk
-        r.ndx_tracking_error,
-        r.ndxe_tracking_error,
-        r.ndx_excess_negative_rate,
-        r.ndxe_excess_negative_rate,
+        -- benchmark-relative risk
+        rr.ndx_tracking_error,
+        rr.ndxe_tracking_error,
+        rr.ndx_excess_negative_rate,
+        rr.ndxe_excess_negative_rate,
 
-        r.pct_time_value_regimes,
-        r.pct_time_mid_regimes,
-        r.pct_time_momentum_regimes,
-        r.pct_time_deep_value,
-        r.pct_time_value_setup,
-        r.pct_time_momentum,
-        r.pct_time_overextended
+        -- regime distribution
+        rd.pct_time_value_regimes,
+        rd.pct_time_mid_regimes,
+        rd.pct_time_momentum_regimes,
+        rd.pct_time_deep_value,
+        rd.pct_time_value_setup,
+        rd.pct_time_momentum,
+        rd.pct_time_overextended
+
     FROM price_risk p
-    LEFT JOIN regime_risk r
-      ON p.ticker = r.ticker
+    LEFT JOIN relative_risk rr
+      ON p.ticker = rr.ticker
+    LEFT JOIN regime_dist rd
+      ON p.ticker = rd.ticker
 )
 
 SELECT *

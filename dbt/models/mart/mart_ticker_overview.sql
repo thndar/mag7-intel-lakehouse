@@ -8,42 +8,45 @@
 -- 1) Base data from regime fact table
 WITH base AS (
     SELECT
+        r.trade_date,
         r.ticker,
 
-        -- Forward returns (absolute)
+        -- Forward returns (from fact_regimes)
         r.fwd_return_1d,
         r.fwd_return_5d,
         r.fwd_return_10d,
         r.fwd_return_20d,
 
-        -- Excess returns vs NDX
-        r.ndx_excess_return_1d,
-        r.ndx_excess_return_5d,
-        r.ndx_excess_return_10d,
-        r.ndx_excess_return_20d,
-
-        -- Excess returns vs NDXE
-        r.ndxe_excess_return_1d,
-        r.ndxe_excess_return_5d,
-        r.ndxe_excess_return_10d,
-        r.ndxe_excess_return_20d,
-
-        -- Volatility measures (from fact_regimes)
-        r.vola_20d,
-        r.vola_60d,
-
-        -- Price trend features
-        r.ma_20,
-        r.ma_50,
-        r.ma_200,
-
-        -- Regime bucket to compute distribution
+        -- Regime / style (from fact_regimes)
         r.regime_bucket_10,
+        r.combined_regime_style,
 
-        -- Label for regime style distribution
-        r.combined_regime_style
+        -- Optional z-score regime fields (from fact_regimes)
+        r.zscore_bucket_10,
+        r.zscore_regime_5,
+
+        -- Volatility + trend (from fact_prices)
+        p.vola_20d,
+        p.vola_60d,
+        p.ma_20,
+        p.ma_50,
+        p.ma_200,
+
+        -- Benchmark-relative (from fact_prices; equity rows only, NULL for index rows)
+        p.ndx_excess_return_1d,
+        p.ndx_excess_return_5d,
+        p.ndx_excess_return_10d,
+        p.ndx_excess_return_20d,
+
+        p.ndxe_excess_return_1d,
+        p.ndxe_excess_return_5d,
+        p.ndxe_excess_return_10d,
+        p.ndxe_excess_return_20d
 
     FROM {{ ref('fact_regimes') }} r
+    LEFT JOIN {{ ref('fact_prices') }} p
+      ON p.trade_date = r.trade_date
+     AND p.ticker     = r.ticker
 ),
 
 -- 2) Summary metrics per ticker
@@ -78,16 +81,16 @@ agg AS (
         AVG(ma_50)  AS avg_ma_50,
         AVG(ma_200) AS avg_ma_200,
 
-        -- ===== Regime distribution =====
-        COUNTIF(regime_bucket_10 BETWEEN 1 AND 3)  / COUNT(*) AS pct_regime_value,
-        COUNTIF(regime_bucket_10 BETWEEN 4 AND 7)  / COUNT(*) AS pct_regime_neutral,
-        COUNTIF(regime_bucket_10 BETWEEN 8 AND 10) / COUNT(*) AS pct_regime_momentum,
+        -- ===== Regime distribution (bucket 10) =====
+        SAFE_DIVIDE(COUNTIF(regime_bucket_10 BETWEEN 1 AND 3),  COUNT(*)) AS pct_regime_value,
+        SAFE_DIVIDE(COUNTIF(regime_bucket_10 BETWEEN 4 AND 7),  COUNT(*)) AS pct_regime_neutral,
+        SAFE_DIVIDE(COUNTIF(regime_bucket_10 BETWEEN 8 AND 10), COUNT(*)) AS pct_regime_momentum,
 
-        -- Combined style distribution
-        COUNTIF(combined_regime_style = 'deep_value')     / COUNT(*) AS pct_deep_value,
-        COUNTIF(combined_regime_style = 'value_setup')    / COUNT(*) AS pct_value_setup,
-        COUNTIF(combined_regime_style = 'momentum')       / COUNT(*) AS pct_momentum,
-        COUNTIF(combined_regime_style = 'overextended')   / COUNT(*) AS pct_overextended,
+        -- ===== Combined style distribution =====
+        SAFE_DIVIDE(COUNTIF(combined_regime_style = 'deep_value'),   COUNT(*)) AS pct_deep_value,
+        SAFE_DIVIDE(COUNTIF(combined_regime_style = 'value_setup'),  COUNT(*)) AS pct_value_setup,
+        SAFE_DIVIDE(COUNTIF(combined_regime_style = 'momentum'),     COUNT(*)) AS pct_momentum,
+        SAFE_DIVIDE(COUNTIF(combined_regime_style = 'overextended'), COUNT(*)) AS pct_overextended,
 
         COUNT(*) AS n_observations
 

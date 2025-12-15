@@ -20,8 +20,7 @@ WITH gkg AS (
     DATE(PARSE_TIMESTAMP('%Y%m%d%H%M%S', CAST(DATE AS STRING))) AS event_date,
     DocumentIdentifier AS url,
     V2Organizations AS organizations_raw,
-    V2Themes AS themes_raw,
-    SAFE_CAST(V2Tone AS FLOAT64) AS tone_raw
+    SAFE_CAST(SPLIT(V2Tone, ',')[SAFE_OFFSET(0)] AS FLOAT64) AS tone_raw
   FROM {{ source('gdeltv2', 'gkg_partitioned') }}
   WHERE DATE IS NOT NULL
 
@@ -53,7 +52,6 @@ flattened AS (
     event_date,
     url,
     org AS organization,
-    themes_raw,
     tone_raw
   FROM orgs, UNNEST(org_list) AS org
   WHERE org IS NOT NULL AND LENGTH(org) > 0
@@ -78,6 +76,5 @@ SELECT
   organization AS matched_org_name,
   ticker,
   company_name,
-  tone_raw AS tone,
-  themes_raw AS themes
-FROM matched
+  tone_raw AS tone
+FROM matched where tone_raw is not null

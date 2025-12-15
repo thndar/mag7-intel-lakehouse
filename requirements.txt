@@ -47,7 +47,6 @@ dagster-webserver>=1.7
 # Dashboard / Visualization
 # ===============================
 streamlit>=1.30
-altair>=5.0
 plotly>=5.18
 
 # ===============================

@@ -1,0 +1,30 @@
+[server]
+# Local dev defaults
+headless = true
+port = 8501
+address = "0.0.0.0"
+enableCORS = true
+enableXsrfProtection = false   # relax for local dev
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Cleaner page layout + less jitter when rerunning
+toolbarMode = "minimal"
+showSidebarNavigation = true
+
+[ui]
+# Keeps menu small and consistent
+hideTopBar = false
+
+[theme]
+base = "light"
+font = "sans serif"
+
+# Neutral, corporate-friendly palette
+primaryColor = "#2563EB"              # blue
+backgroundColor = "#FFFFFF"           # white
+secondaryBackgroundColor = "#F6F8FB"  # very light gray/blue tint
+textColor = "#111827"                 # near-black

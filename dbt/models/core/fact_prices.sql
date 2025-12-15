@@ -10,7 +10,7 @@
     tags         = ['core', 'fact', 'prices']
 ) }}
 
--- 1) Mag7 TA prices
+-- 1) MAG7 equities: use benchmark-enriched intermediate as the single source of truth
 WITH mag7 AS (
   SELECT
     trade_date,
@@ -48,11 +48,26 @@ WITH mag7 AS (
     atr_14,
     ma_20,
     ma_50,
-    ma_200
-  FROM {{ ref('int_mag7_ta') }}
+    ma_200,
+
+    -- benchmark-relative features (equity-only)
+    ndx_excess_return_1d,
+    ndx_excess_return_5d,
+    ndx_excess_return_10d,
+    ndx_excess_return_20d,
+    ndx_relative_strength_20d,
+    ndx_price_ratio,
+
+    ndxe_excess_return_1d,
+    ndxe_excess_return_5d,
+    ndxe_excess_return_10d,
+    ndxe_excess_return_20d,
+    ndxe_relative_strength_20d,
+    ndxe_price_ratio
+  FROM {{ ref('int_mag7_ta_benchmark') }}
 ),
 
--- 2) Index TA prices (^NDX, ^NDXE, etc.)
+-- 2) Index TA prices (^NDX, ^NDXE, etc.), benchmark-relative fields are NULL
 index_prices AS (
   SELECT
     trade_date,
@@ -90,7 +105,22 @@ index_prices AS (
     atr_14,
     ma_20,
     ma_50,
-    ma_200
+    ma_200,
+
+    -- benchmark-relative placeholders (not applicable for index rows)
+    CAST(NULL AS FLOAT64) AS ndx_excess_return_1d,
+    CAST(NULL AS FLOAT64) AS ndx_excess_return_5d,
+    CAST(NULL AS FLOAT64) AS ndx_excess_return_10d,
+    CAST(NULL AS FLOAT64) AS ndx_excess_return_20d,
+    CAST(NULL AS FLOAT64) AS ndx_relative_strength_20d,
+    CAST(NULL AS FLOAT64) AS ndx_price_ratio,
+
+    CAST(NULL AS FLOAT64) AS ndxe_excess_return_1d,
+    CAST(NULL AS FLOAT64) AS ndxe_excess_return_5d,
+    CAST(NULL AS FLOAT64) AS ndxe_excess_return_10d,
+    CAST(NULL AS FLOAT64) AS ndxe_excess_return_20d,
+    CAST(NULL AS FLOAT64) AS ndxe_relative_strength_20d,
+    CAST(NULL AS FLOAT64) AS ndxe_price_ratio
   FROM {{ ref('int_index_ta') }}
 ),
 
@@ -145,6 +175,19 @@ SELECT
   atr_14,
   ma_20,
   ma_50,
-  ma_200
+  ma_200,
+  -- benchmark-relative (equity-only; NULL for index rows)
+  ndx_excess_return_1d,
+  ndx_excess_return_5d,
+  ndx_excess_return_10d,
+  ndx_excess_return_20d,
+  ndx_relative_strength_20d,
+  ndx_price_ratio,
+  ndxe_excess_return_1d,
+  ndxe_excess_return_5d,
+  ndxe_excess_return_10d,
+  ndxe_excess_return_20d,
+  ndxe_relative_strength_20d,
+  ndxe_price_ratio
 
 FROM filtered

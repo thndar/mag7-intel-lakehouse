@@ -10,28 +10,53 @@
     tags         = ['core', 'fact', 'regime']
 ) }}
 
--- Thin regime fact:
---   - regime labels (percentile, zscore, combined style)
---   - minimal inputs for explainability
---   - forward returns for outcome analysis
-
 -- 1) Base: stock TA + benchmark features
 WITH base AS (
   SELECT
     trade_date,
     ticker,
-
-    -- inputs required to compute regimes
     adj_close,
-    rolling_min_200d,
-    rolling_max_200d,
-    price_zscore_20d,
 
     -- forward returns – use for analyse per regime
     fwd_return_1d,
     fwd_return_5d,
     fwd_return_10d,
-    fwd_return_20d
+    fwd_return_20d,
+
+    -- use precomputed 200d window from intermediate
+    rolling_min_200d,
+    rolling_max_200d,
+
+    -- z-score feature (20-day window)
+    price_zscore_20d,
+
+    -- keep existing TA matrics to slicing:
+    return_1d,
+    return_5d,
+    return_10d,
+    return_20d,
+    vola_20d,
+    vola_60d,
+    cumsum_return_20d,
+    atr_14,
+    ma_20,
+    ma_50,
+    ma_200,
+
+    -- benchmark-relative features from the intermediate view
+    ndx_excess_return_1d,
+    ndx_excess_return_5d,
+    ndx_excess_return_10d,
+    ndx_excess_return_20d,
+    ndx_relative_strength_20d,
+    ndx_price_ratio,
+
+    ndxe_excess_return_1d,
+    ndxe_excess_return_5d,
+    ndxe_excess_return_10d,
+    ndxe_excess_return_20d,
+    ndxe_relative_strength_20d,
+    ndxe_price_ratio
 
   FROM {{ ref('int_mag7_ta_benchmark') }}
 ),
@@ -109,7 +134,6 @@ combined AS (
 SELECT
   trade_date,
   ticker,
-  -- regime labels
   -- Percentile regime
   price_pos_200d,
   regime_bucket_10,
@@ -119,16 +143,40 @@ SELECT
   zscore_regime_5,
   -- Combined regime
   combined_regime_style,
-  
-  -- regime explainability inputs
+  -- Rolling range
   rolling_min_200d,
   rolling_max_200d,
-  
-  -- outcomes  (alpha signals)
+  -- Forward returns (alpha signals)
   fwd_return_1d,
   fwd_return_5d,
   fwd_return_10d,
-  fwd_return_20d
+  fwd_return_20d,
+  -- Optional: keep all TA & benchmark metrics
+  return_1d,
+  return_5d,
+  return_10d,
+  return_20d,
+  vola_20d,
+  vola_60d,
+  cumsum_return_20d,
+  atr_14,
+  ma_20,
+  ma_50,
+  ma_200,
+
+  ndx_excess_return_1d,
+  ndx_excess_return_5d,
+  ndx_excess_return_10d,
+  ndx_excess_return_20d,
+  ndx_relative_strength_20d,
+  ndx_price_ratio,
+
+  ndxe_excess_return_1d,
+  ndxe_excess_return_5d,
+  ndxe_excess_return_10d,
+  ndxe_excess_return_20d,
+  ndxe_relative_strength_20d,
+  ndxe_price_ratio
 
 FROM combined
 WHERE regime_bucket_10 IS NOT NULL

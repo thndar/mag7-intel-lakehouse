@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: signal_core
+    description: >
+      Canonical core equity signal based on price regime and short-term z-score.
+      Represents validated S0 logic only. No volatility, macro, or execution logic.
+
+    columns:
+      - name: trade_date
+        tests: [not_null]
+
+      - name: ticker
+        tests: [not_null]
+
+      - name: regime_bucket_10
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1,2,3,4,5,6,7,8,9,10]
+
+      - name: zscore_bucket_10
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1,2,3,4,5,6,7,8,9,10]
+
+      - name: core_signal_state
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['LONG_SETUP', 'NEUTRAL', 'OVEREXTENDED']
+
+      - name: is_long_setup
+        tests: [not_null]
+
+      # optional, if you keep/introduce these cols
+      # - name: core_score
+      #   tests: [not_null]
+      # - name: core_score_norm
+      #   tests: [not_null]
+
+
+  - name: signal_research_performance
+    description: >
+      Research-only forward return summary conditioned on core signal state.
+      Includes EARLY/LATE/FULL split per ticker and horizons (5/10/20).
+      Not an execution backtest; no trading assumptions.
+
+    columns:
+      - name: ticker
+        tests: [not_null]
+
+      - name: period_label
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['EARLY', 'LATE', 'FULL']
+
+      - name: horizon
+        tests:
+          - not_null
+          - accepted_values:
+              values: [5, 10, 20]
+
+      - name: core_signal_state
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['LONG_SETUP', 'NEUTRAL', 'OVEREXTENDED']
+
+      - name: n_obs
+        tests: [not_null]
+
+      - name: avg_forward_return
+        tests: [not_null]
