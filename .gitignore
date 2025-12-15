@@ -57,13 +57,13 @@ dbt/.user.yml
 *.meltano.lock
 
 ########################################
-# DAGGER
+# DAGSTER RUNTIME / STATE
 ########################################
-# Dagger engine & temp files
-.dagger/
-dagger-engine/
-dagger-cache/
-*dagger*.log
+orchestration/dagster_home/history/
+orchestration/dagster_home/schedules/
+orchestration/dagster_home/storage/
+orchestration/dagster_home/*.db
+orchestration/dagster_home/**/*.db
 
 ########################################
 # STREAMLIT
@@ -108,4 +108,3 @@ dist/
 # data/
 downloads/
 raw_data/
-orchestration/dagster_home/history/runs.db
