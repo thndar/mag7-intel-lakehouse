@@ -9,9 +9,30 @@ from pathlib import Path
 from dotenv import load_dotenv
 import subprocess
 
+# ---------------------------------------------------------------------
+# Auto-discover project root by walking up until we find expected markers
+# ---------------------------------------------------------------------
+def discover_project_root(start: Path) -> Path:
+    """
+    Walk upwards from `start` looking for the repo root.
+
+    Repo root is defined as a directory containing:
+      - meltano/meltano.yml
+      - dbt/dbt_project.yml
+    (You can relax/tighten these markers as needed.)
+    """
+    start = start.resolve()
+    for p in (start, *start.parents):
+        if (p / "meltano" / "meltano.yml").exists() and (p / "dbt" / "dbt_project.yml").exists():
+            return p
+    raise RuntimeError(
+        "Could not auto-discover PROJECT_ROOT. "
+        f"Started from: {start}. "
+        "Expected to find meltano/meltano.yml and dbt/dbt_project.yml in a parent directory."
+    )
+
 # This file: mag7_intel/orchestration/orchestration/assets.py
-# Project root: mag7_intel/
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = discover_project_root(Path(__file__))
 MELTANO_DIR = PROJECT_ROOT / "meltano"
 DBT_DIR = PROJECT_ROOT / "dbt"
 
